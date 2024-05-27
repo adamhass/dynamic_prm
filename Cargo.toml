@@ -1,0 +1,9 @@
+[package]
+name = "dynamic_prm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pathfinding = "4.9.1"
+rand = "0.8.5"
+geo = "0.28.0"
