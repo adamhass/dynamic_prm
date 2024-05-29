@@ -8,10 +8,11 @@ use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-const VERTICES: usize = 10000;
-const OBSTACLES: usize = 50;
-const WIDTH: usize = 100;
-const HEIGHT: usize = 100;
+const VERTICES: usize = 100000;
+const THREAD_LIST: [usize; 2] = [16, 32];
+const OBSTACLES: usize = 100;
+const WIDTH: usize = 300;
+const HEIGHT: usize = 300;
 const SEED: [u8; 32] = [0u8; 32];
 
 fn init_prm() -> Prm {
@@ -34,11 +35,9 @@ fn precompute_prm(viable_edges: bool) -> Prm {
 
 // Define a function to benchmark `parallel_prm`
 fn benchmark_parallel_prm(c: &mut Criterion) {
-    // Define the number of threads to test
-    let num_threads_list = vec![1, 2, 4, 8];
     let mut group = c.benchmark_group(format!("Parallel PRM {} Vertices", VERTICES));
     // Use a loop to create benchmarks for each number of threads
-    for &num_threads in &num_threads_list {
+    for &num_threads in &THREAD_LIST {
         let prm = init_prm();
         group.bench_with_input(
             BenchmarkId::new("Basic, Threads", num_threads),
@@ -52,7 +51,7 @@ fn benchmark_parallel_prm(c: &mut Criterion) {
             },
         );
     }
-    for &num_threads in &num_threads_list {
+    for &num_threads in &THREAD_LIST {
         let mut prm = init_prm();
         prm.cfg.use_viable_edges = true;
         group.bench_with_input(
@@ -81,7 +80,7 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
 
     // Use a loop to create benchmarks for each number of threads
     let mut prm_original = Arc::new(Mutex::new(precompute_prm(false)));
-    for &num_threads in &num_threads_list {
+    for &num_threads in &THREAD_LIST {
         group.bench_with_input(
             BenchmarkId::new("Basic, Threads", num_threads),
             &num_threads,
@@ -105,7 +104,7 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
     }
     // Use a loop to create benchmarks for each number of threads
     let mut prm_original = Arc::new(Mutex::new(precompute_prm(true)));
-    for &num_threads in &num_threads_list {
+    for &num_threads in &THREAD_LIST {
         group.bench_with_input(
             BenchmarkId::new("Viable edges, Threads", num_threads),
             &num_threads,
