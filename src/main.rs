@@ -1,3 +1,4 @@
+#![allow(unused)]
 // use pathfinding::directed::astar::astar;
 use dynamic_prm::prelude::*;
 use plotters::prelude::*;
@@ -20,9 +21,9 @@ async fn main() {
     let seed = Arc::new([0u8; 32]);
     let start_width = 100;
     let start_height = 100;
-    let start_num_vertices = 10000;
+    let start_num_vertices = 1000;
     let start_num_obstacles = 50;
-    let iterations = 1;
+    let iterations = 2;
     for i in 1..iterations + 1 {
         // Print the parameters
         let width = start_width;
@@ -38,47 +39,47 @@ async fn main() {
         println!("* HEIGHT: {}", height);
         println!("* THREADS: {}", threads);
         // Iteration set-up
-        let seed = Arc::new([i as u8; 32]);
-        let mut rng = ChaCha8Rng::from_seed(*seed);
-        let obstacles = Arc::new(ObstacleSet::new_random(
-            num_obstacles,
-            width,
-            height,
-            &mut rng,
-        ));
-        let cfg = PrmConfig {
+        let seed = [i as u8; 32];
+        let mut cfg = PrmConfig::new(
             num_vertices,
             width,
             height,
             seed,
-        };
-        let mut prm = Prm::new(cfg, obstacles);
-
+        );
+        if i== 2 {
+            cfg.use_viable_edges = true;
+        }
+        let mut prm = Prm::new(cfg, num_obstacles);
+        let new_obstacle: Obstacle = Obstacle::new((40.0, 40.0), (60.0, 60.0));
+        prm.print();
         // Start timer
         let start_time = Instant::now();
         // Do parallel PRM
-        let (vertices, edges) = prm.run_prm(threads).await;
-
+        prm.compute(threads).await;
         // End timer, convert to ms
         let duration = start_time.elapsed().as_millis() as f64;
 
-        let max_edge_length = edges.iter().map(|e| e.length).reduce(f64::max);
-        if let Some(max) = max_edge_length {
-            println!("Max edge length: {}", max);
-        }
-        println!("Vertices: {}, Edges: {}", vertices.len(), edges.len());
+        let max_edge_length = prm.edges.iter().map(|e| e.length).reduce(f64::max);
+        prm.print();
         println!("Duration (ms): {}", duration);
-        plot(i, &edges, &vertices, &prm.obstacles, width, height);
-        prm.update_vertices_and_edges(vertices, edges);
+        plot(format!("{}_new", i), &prm);
 
-        // Add obstacle
+        // Add new obstacle
+
         let start_time = Instant::now();
-        let new_obstacle = Obstacle::new_random(&mut rng, width, height);
-        let edges =  prm.add_obstacle(new_obstacle, threads).await;
+        prm.add_obstacle(new_obstacle.clone(), threads).await;
         let duration = start_time.elapsed().as_millis() as f64;
-        println!("Edges to be removed: {}", edges.len());
+        prm.print();
+        plot(format!("{}_added_obstacle", i), &prm);
+
+        // Remove obstacle
+        // let remove_obstacle = prm.obstacles.obstacles.get(0).unwrap().clone();
+        let start_time = Instant::now();
+        prm.remove_obstacle(new_obstacle, threads).await;
+        let duration = start_time.elapsed().as_millis() as f64;
+        prm.print();
         println!("Duration (ms): {}", duration);
-        plot(i, &edges, &prm.vertices, &prm.obstacles, width, height);
+        plot(format!("{}_removed_obstacle", i), &prm);
     }
 }
 
@@ -93,14 +94,10 @@ fn parse_env_var(name: &str) -> usize {
 }
 
 fn plot(
-    iteration: usize,
-    edges: &Vec<Edge>,
-    vertices: &Vec<Vertex>,
-    obstacles: &Arc<ObstacleSet>,
-    width: usize,
-    height: usize,
+    name: String,
+    prm: &Prm,
 ) -> () {
-    let filename = format!("output/{}.png", iteration);
+    let filename = format!("output/{}.png", name);
     // Create a drawing area
     let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
     root.fill(&WHITE).unwrap();
@@ -110,15 +107,21 @@ fn plot(
         .caption("Edges and Obstacles", ("sans-serif", 50))
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0.0..(width as f64), 0.0..(height as f64))
+        .build_cartesian_2d(0.0..(prm.cfg.width as f64), 0.0..(prm.cfg.height as f64))
         .unwrap();
 
     chart.configure_mesh().draw().unwrap();
 
+    // Draw obstacles
+    chart
+        .draw_series(prm.obstacles.obstacles.iter().map(|o| o.rectangle()))
+        .unwrap();
+    root.present().unwrap();
+
     // Draw vertices
     chart
         .draw_series(
-            vertices
+            (*prm.vertices).clone()
                 .into_iter()
                 .map(|v| Circle::new(v.point.0.x_y(), 2, &BLACK)),
         )
@@ -127,19 +130,13 @@ fn plot(
     // Draw edges
     chart
         .draw_series(
-            edges.iter().map(|edge| {
+            prm.edges.iter().map(|edge| {
                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &BLUE)
             }),
         )
         .unwrap()
         .label("Edge")
         .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLUE));
-
-    // Draw obstacles
-    chart
-        .draw_series(obstacles.obstacles.iter().map(|o| o.rectangle()))
-        .unwrap();
-    root.present().unwrap();
 }
 
 /*
