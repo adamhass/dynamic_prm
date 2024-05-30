@@ -19,12 +19,12 @@ async fn main() {
     */
     let threads: usize = 4;
     let seed = Arc::new([0u8; 32]);
-    let start_width = 300;
-    let start_height = 300;
-    let start_num_vertices = 100000;
+    let start_width = 150;
+    let start_height = 150;
+    let start_num_vertices = 10000;
     let start_num_obstacles = 100;
-    let iterations = 2;
-    for i in 2..iterations + 1 {
+    let iterations = 1;
+    for i in 1..iterations + 1 {
         // Print the parameters
         let width = start_width;
         let height = start_height;
