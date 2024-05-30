@@ -24,6 +24,7 @@ pub struct PrmConfig {
     pub height: usize,
     pub seed: Arc<Mutex<[u8; 32]>>,
     pub use_viable_edges: bool,
+    pub use_blocked_per_obstacle: bool,
 }
 
 impl PrmConfig {
@@ -34,6 +35,7 @@ impl PrmConfig {
             height,
             seed: Arc::new(Mutex::new(seed)),
             use_viable_edges: false, // Default to false
+            use_blocked_per_obstacle: false, // Default to false
         }
     }
 }
@@ -198,6 +200,22 @@ impl Prm {
             return self.compute(num_threads).await
         }
 
+        let new_edges = self.find_new_edges(obstacle, num_threads).await;
+        // println!("Adding {} edges", new_edges.len());
+        // Move the edges from viable to edges:
+        let mut edges = (*self.edges).clone();
+        let mut viable_edges = (*self.viable_edges).clone();
+        for (i, index) in new_edges.iter().enumerate() {
+            edges.push(viable_edges.remove(index-i));
+        }
+        self.edges = Arc::new(edges);
+        self.viable_edges = Arc::new(viable_edges);
+    }
+
+    /// obstacle must already be removed the self.obstacles
+    pub async fn find_new_edges(&self, obstacle: Obstacle, num_threads: usize) -> Vec<usize> {
+        assert!(!self.obstacles.obstacles.contains(&obstacle));
+
         let mut handles = Vec::new();
         for i in 0..num_threads {
             let clone = self.clone();
@@ -218,16 +236,8 @@ impl Prm {
                 }
             }
         }
-        // println!("Adding {} edges", new_edges.len());
-        // Move the edges from viable to edges:
-        let mut edges = (*self.edges).clone();
-        let mut viable_edges = (*self.viable_edges).clone();
-        for (i, index) in new_edges.iter().enumerate() {
-            edges.push(viable_edges.remove(index-i));
-        }
-        self.edges = Arc::new(edges);
-        self.viable_edges = Arc::new(viable_edges);
-    }
+        new_edges
+    } 
 
     async fn prm_worker(&self, start: usize, end: usize) -> (Vec<Vertex>, Vec<Edge>, Vec<Edge>) {
         let vertices = self.generate_vertices(end, self.cfg.width, self.cfg.height);

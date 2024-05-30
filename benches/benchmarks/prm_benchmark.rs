@@ -75,14 +75,9 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
         VERTICES
     ));
     
-    let mut prm_original = Arc::new(Mutex::new(precompute_prm(false)));
+    let mut prm_original = precompute_prm(false);
     let mut rng = ChaCha8Rng::from_seed(SEED);
     let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
-    Runtime::new().unwrap().block_on(
-        prm_original.lock().unwrap()
-        .add_obstacle(obstacle.clone(), 4)
-    );
-    
     // Use a loop to create benchmarks for each number of threads
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
@@ -91,16 +86,10 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {
-                        Runtime::new().unwrap().block_on(
-                            prm_original.lock().unwrap()
-                                .remove_obstacle(obstacle.clone(), num_threads));
+                        
                     },
-                    |_| {
-                        let prm = Arc::clone(&prm_original);
-                        async move {
-                            let mut prm = prm.lock().unwrap();
-                            prm.add_obstacle(obstacle, num_threads).await;
-                        }
+                     || {
+                        prm_original.remove_edges(obstacle.clone(), num_threads)
                     },
                     criterion::BatchSize::LargeInput,
                 );
@@ -108,7 +97,7 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
         );
     }
     // Create a new PRM with viable edges
-    let mut prm_original = Arc::new(Mutex::new(precompute_prm(true)));
+    let mut prm_original = precompute_prm(true);
     Runtime::new().unwrap().block_on(
         prm_original.lock().unwrap()
         .add_obstacle(obstacle.clone(), 4)
@@ -120,16 +109,9 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {
-                        Runtime::new().unwrap().block_on(
-                            prm_original.lock().unwrap()
-                                .remove_obstacle(obstacle.clone(), num_threads));
                     },
                     |(_)| {
-                        let prm = Arc::clone(&prm_original);
-                        async move {
-                            let mut prm = prm.lock().unwrap();
-                            prm.add_obstacle(obstacle, num_threads).await;
-                        }
+                        prm_original.remove_edges(obstacle.clone(), num_threads)
                     },
                     criterion::BatchSize::LargeInput,
                 );
@@ -147,7 +129,16 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
     let mut rng = ChaCha8Rng::from_seed(SEED);
     let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
     // Create a new PRM with viable edges
-    let mut prm_original = Arc::new(Mutex::new(precompute_prm(true)));
+    let mut prm_original = precompute_prm(true);
+    let original_obstacles = prm.obstacles.clone();
+
+    // Insert the obstacle properly.
+    Runtime::new().unwrap().block_on(
+        prm_original.add_obstacle(obstacle.clone(), 4)
+    );
+
+    // Re-remove the obstacle from the obstacle set so that its removal can be processed properly
+    prm_original.obstacles = original_obstacles;
 
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
@@ -155,20 +146,11 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
             &num_threads,
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
-                    || {
-                        Runtime::new().unwrap().block_on(
-                            prm_original.lock().unwrap()
-                            .add_obstacle(obstacle.clone(), 4)
-                        );
-                    },
+                    || {},
                     |(_)| {
-                        let prm = Arc::clone(&prm_original);
-                        async move {
-                            let mut prm = prm.lock().unwrap();
-                            prm.remove_obstacle(obstacle, num_threads).await;
-                        }
-                    },
-                    criterion::BatchSize::LargeInput,
+                            prm.find_new_edges(obstacle.clone(), num_threads)
+                        },
+                    criterion::BatchSize::SmallInput,
                 );
             },
         );
@@ -177,5 +159,5 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
 }
 
 // Define the criterion group and criterion main functions
-criterion_group!(prm_benchmarks, benchmark_parallel_prm, benchmark_remove_obstacle, benchmark_add_obstacle);
+criterion_group!(prm_benchmarks, benchmark_remove_obstacle, benchmark_add_obstacle); // benchmark_parallel_prm
 criterion_main!(prm_benchmarks);
