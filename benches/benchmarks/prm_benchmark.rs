@@ -14,15 +14,11 @@ const OBSTACLES: usize = 50;
 const WIDTH: usize = 100;
 const HEIGHT: usize = 100;
 const SEED: [u8; 32] = [0u8; 32];
+const OTHER_SEED: [u8; 32] = [1u8; 32];
 
 fn init_prm() -> Prm {
     // Parameters common to all benchmarks:
-    let cfg = PrmConfig::new(
-        VERTICES,
-        WIDTH,
-        HEIGHT,
-        SEED,
-    );
+    let cfg = PrmConfig::new(VERTICES, WIDTH, HEIGHT, SEED);
     Prm::new(cfg, OBSTACLES)
 }
 
@@ -74,47 +70,31 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
         "Parallel Obstacle Insertion, {} Vertices",
         VERTICES
     ));
-    
-    let mut prm_original = precompute_prm(false);
-    let mut rng = ChaCha8Rng::from_seed(SEED);
-    let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
+
     // Use a loop to create benchmarks for each number of threads
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
     for &num_threads in &THREAD_LIST {
+        let prm = precompute_prm(false);
         group.bench_with_input(
             BenchmarkId::new("Basic, Threads", num_threads),
             &num_threads,
             |b, &num_threads| {
-                b.to_async(Runtime::new().unwrap()).iter_batched(
-                    || {
-                        
-                    },
-                     || {
-                        prm_original.remove_edges(obstacle.clone(), num_threads)
-                    },
-                    criterion::BatchSize::LargeInput,
-                );
+                b.to_async(Runtime::new().unwrap()).iter(|| {
+                    prm.remove_edges(Obstacle::new_random(&mut rng, WIDTH, HEIGHT), num_threads)
+                });
             },
         );
     }
-    // Create a new PRM with viable edges
-    let mut prm_original = precompute_prm(true);
-    Runtime::new().unwrap().block_on(
-        prm_original.lock().unwrap()
-        .add_obstacle(obstacle.clone(), 4)
-    );
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
     for &num_threads in &THREAD_LIST {
+        let prm = precompute_prm(true);
         group.bench_with_input(
-            BenchmarkId::new("Viable edges, Threads", num_threads),
+            BenchmarkId::new("Basic, Threads", num_threads),
             &num_threads,
             |b, &num_threads| {
-                b.to_async(Runtime::new().unwrap()).iter_batched(
-                    || {
-                    },
-                    |(_)| {
-                        prm_original.remove_edges(obstacle.clone(), num_threads)
-                    },
-                    criterion::BatchSize::LargeInput,
-                );
+                b.to_async(Runtime::new().unwrap()).iter(|| {
+                    prm.remove_edges(Obstacle::new_random(&mut rng, WIDTH, HEIGHT), num_threads)
+                });
             },
         );
     }
@@ -122,23 +102,20 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
 }
 
 fn benchmark_remove_obstacle(c: &mut Criterion) {
-    let mut group = c.benchmark_group(format!(
-        "Parallel Obstacle Removal, {} Vertices",
-        VERTICES
-    ));
-    let mut rng = ChaCha8Rng::from_seed(SEED);
+    let mut group = c.benchmark_group(format!("Parallel Obstacle Removal, {} Vertices", VERTICES));
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
     let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
     // Create a new PRM with viable edges
-    let mut prm_original = precompute_prm(true);
+    let mut prm = precompute_prm(true);
     let original_obstacles = prm.obstacles.clone();
 
     // Insert the obstacle properly.
-    Runtime::new().unwrap().block_on(
-        prm_original.add_obstacle(obstacle.clone(), 4)
-    );
+    Runtime::new()
+        .unwrap()
+        .block_on(prm.add_obstacle(obstacle.clone(), 4));
 
     // Re-remove the obstacle from the obstacle set so that its removal can be processed properly
-    prm_original.obstacles = original_obstacles;
+    prm.obstacles = original_obstacles;
 
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
@@ -147,9 +124,7 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {},
-                    |(_)| {
-                            prm.find_new_edges(obstacle.clone(), num_threads)
-                        },
+                    |_| prm.find_new_edges(obstacle.clone(), num_threads),
                     criterion::BatchSize::SmallInput,
                 );
             },
@@ -159,5 +134,9 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
 }
 
 // Define the criterion group and criterion main functions
-criterion_group!(prm_benchmarks, benchmark_remove_obstacle, benchmark_add_obstacle); // benchmark_parallel_prm
+criterion_group!(
+    prm_benchmarks,
+    benchmark_remove_obstacle,
+    benchmark_add_obstacle
+); // benchmark_parallel_prm
 criterion_main!(prm_benchmarks);

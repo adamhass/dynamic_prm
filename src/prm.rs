@@ -34,7 +34,7 @@ impl PrmConfig {
             width,
             height,
             seed: Arc::new(Mutex::new(seed)),
-            use_viable_edges: false, // Default to false
+            use_viable_edges: false,         // Default to false
             use_blocked_per_obstacle: false, // Default to false
         }
     }
@@ -52,7 +52,8 @@ pub struct Prm {
 impl Prm {
     pub fn new(cfg: PrmConfig, n_obstacles: usize) -> Prm {
         let mut rng = ChaCha8Rng::from_seed(*cfg.seed.lock().unwrap());
-        let obstacles = Arc::new(ObstacleSet::new_random(n_obstacles, cfg.width, cfg.height, &mut rng).into());
+        let obstacles =
+            Arc::new(ObstacleSet::new_random(n_obstacles, cfg.width, cfg.height, &mut rng).into());
         {
             Prm {
                 vertices: Arc::new(Vec::new().into()),
@@ -65,7 +66,13 @@ impl Prm {
     }
 
     pub fn print(&self) {
-        println!("Vertices: {}, Edges: {}, Viable Edges: {}, Obstacles: {}", self.vertices.len(), self.edges.len(), self.viable_edges.len(), self.obstacles.obstacles.len());
+        println!(
+            "Vertices: {}, Edges: {}, Viable Edges: {}, Obstacles: {}",
+            self.vertices.len(),
+            self.edges.len(),
+            self.viable_edges.len(),
+            self.obstacles.obstacles.len()
+        );
     }
 
     pub fn increment_seed(&self) -> () {
@@ -79,12 +86,7 @@ impl Prm {
         ChaCha8Rng::from_seed((self.cfg.seed.lock().unwrap()).clone())
     }
 
-    fn generate_vertices(
-        &self,
-        n: usize,
-        width: usize,
-        height: usize,
-    ) -> Vec<Point<f64>> {
+    fn generate_vertices(&self, n: usize, width: usize, height: usize) -> Vec<Point<f64>> {
         let mut rng = self.get_rng();
         let mut vertices = Vec::new();
         while vertices.len() < n {
@@ -98,17 +100,22 @@ impl Prm {
 
     pub async fn compute(&mut self, num_threads: usize) -> () {
         let (v, e, viable_edges) = self.run_prm(num_threads).await;
-        self.update_vertices_and_edges(v,e, viable_edges);
+        self.update_vertices_and_edges(v, e, viable_edges);
     }
 
-    pub fn update_vertices_and_edges(&mut self, vertices: Vec<Vertex>, edges: Vec<Edge>, viable_edges: Vec<Edge>) -> () {
+    pub fn update_vertices_and_edges(
+        &mut self,
+        vertices: Vec<Vertex>,
+        edges: Vec<Edge>,
+        viable_edges: Vec<Edge>,
+    ) -> () {
         self.vertices = Arc::new(vertices.into());
         self.edges = Arc::new(edges.into());
         self.viable_edges = Arc::new(viable_edges.into());
     }
 
     /// Returns the set of vertices and edges to be removed
-    pub async fn remove_edges(&mut self, obstacle: Obstacle, num_threads: usize) -> Vec<Edge> {
+    pub async fn remove_edges(&self, obstacle: Obstacle, num_threads: usize) -> Vec<Edge> {
         let chunk_size = self.edges.len() / num_threads;
         let mut handles = Vec::new();
         for i in 0..num_threads {
@@ -170,12 +177,17 @@ impl Prm {
     }
 
     // Returns subset of viable_edges indicies that can be added to edges
-    async fn create_edges_worker(&self, worker_index: usize, num_workers: usize, obstacle: Obstacle) -> (Vec<usize>) {
+    async fn create_edges_worker(
+        &self,
+        worker_index: usize,
+        num_workers: usize,
+        obstacle: Obstacle,
+    ) -> (Vec<usize>) {
         let mut new_edges = Vec::new();
         let n = self.viable_edges.len();
         let chunk_size = (n + num_workers - 1) / num_workers;
         let start = worker_index * chunk_size;
-        let end = ((worker_index + 1) * chunk_size).min(n);  // Ensure end does not exceed n
+        let end = ((worker_index + 1) * chunk_size).min(n); // Ensure end does not exceed n
 
         for i in start..end {
             let e = self.viable_edges[i].clone();
@@ -197,7 +209,7 @@ impl Prm {
 
         if !self.cfg.use_viable_edges {
             // Rerun PRM* and return
-            return self.compute(num_threads).await
+            return self.compute(num_threads).await;
         }
 
         let new_edges = self.find_new_edges(obstacle, num_threads).await;
@@ -206,7 +218,7 @@ impl Prm {
         let mut edges = (*self.edges).clone();
         let mut viable_edges = (*self.viable_edges).clone();
         for (i, index) in new_edges.iter().enumerate() {
-            edges.push(viable_edges.remove(index-i));
+            edges.push(viable_edges.remove(index - i));
         }
         self.edges = Arc::new(edges);
         self.viable_edges = Arc::new(viable_edges);
@@ -219,11 +231,14 @@ impl Prm {
         let mut handles = Vec::new();
         for i in 0..num_threads {
             let clone = self.clone();
-            let handle =
-            tokio::spawn(async move { clone.create_edges_worker(i, num_threads, obstacle.clone()).await });
+            let handle = tokio::spawn(async move {
+                clone
+                    .create_edges_worker(i, num_threads, obstacle.clone())
+                    .await
+            });
             handles.push(handle);
         }
-        
+
         // Collect all results
         let mut new_edges = Vec::new();
         for handle in handles {
@@ -237,7 +252,7 @@ impl Prm {
             }
         }
         new_edges
-    } 
+    }
 
     async fn prm_worker(&self, start: usize, end: usize) -> (Vec<Vertex>, Vec<Edge>, Vec<Edge>) {
         let vertices = self.generate_vertices(end, self.cfg.width, self.cfg.height);
@@ -343,8 +358,7 @@ pub struct Obstacle {
 
 impl PartialEq for Obstacle {
     fn eq(&self, other: &Self) -> bool {
-        self.rect.min() == other.rect.min() 
-        && self.rect.max() == other.rect.max()
+        self.rect.min() == other.rect.min() && self.rect.max() == other.rect.max()
     }
 }
 
@@ -359,7 +373,9 @@ impl Obstacle {
     }
 
     pub fn new(c1: (f64, f64), c2: (f64, f64)) -> Obstacle {
-        Obstacle{rect: Rect::new(c1, c2)}
+        Obstacle {
+            rect: Rect::new(c1, c2),
+        }
     }
 
     fn contains(&self, point: &Point<f64>) -> bool {

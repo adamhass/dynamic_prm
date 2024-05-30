@@ -40,13 +40,8 @@ async fn main() {
         println!("* THREADS: {}", threads);
         // Iteration set-up
         let seed = [i as u8; 32];
-        let mut cfg = PrmConfig::new(
-            num_vertices,
-            width,
-            height,
-            seed,
-        );
-        if i== 2 {
+        let mut cfg = PrmConfig::new(num_vertices, width, height, seed);
+        if i == 2 {
             cfg.use_viable_edges = true;
         }
         let mut prm = Prm::new(cfg, num_obstacles);
@@ -93,10 +88,7 @@ fn parse_env_var(name: &str) -> usize {
         .expect(&format!("Failed to parse environment variable {}", name))
 }
 
-fn plot(
-    name: String,
-    prm: &Prm,
-) -> () {
+fn plot(name: String, prm: &Prm) -> () {
     let filename = format!("output/{}.png", name);
     // Create a drawing area
     let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
@@ -121,7 +113,8 @@ fn plot(
     // Draw vertices
     chart
         .draw_series(
-            (*prm.vertices).clone()
+            (*prm.vertices)
+                .clone()
                 .into_iter()
                 .map(|v| Circle::new(v.point.0.x_y(), 2, &BLACK)),
         )
