@@ -8,11 +8,11 @@ use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-const VERTICES: usize = 100000;
-const THREAD_LIST: [usize; 2] = [16, 32];
-const OBSTACLES: usize = 100;
-const WIDTH: usize = 300;
-const HEIGHT: usize = 300;
+const VERTICES: usize = 10000;
+const THREAD_LIST: [usize; 7] = [1, 2, 4, 8, 16, 32, 64];
+const OBSTACLES: usize = 50;
+const WIDTH: usize = 100;
+const HEIGHT: usize = 100;
 const SEED: [u8; 32] = [0u8; 32];
 
 fn init_prm() -> Prm {
@@ -70,16 +70,20 @@ fn benchmark_parallel_prm(c: &mut Criterion) {
 }
 
 fn benchmark_add_obstacle(c: &mut Criterion) {
-    // Define the number of threads to test
-    let num_threads_list = vec![1, 2, 4, 8];
     let mut group = c.benchmark_group(format!(
-        "Parallel Obstacle Insert and Remove, {} Vertices",
+        "Parallel Obstacle Insertion, {} Vertices",
         VERTICES
     ));
-    let mut rng = ChaCha8Rng::from_seed(SEED);
-
-    // Use a loop to create benchmarks for each number of threads
+    
     let mut prm_original = Arc::new(Mutex::new(precompute_prm(false)));
+    let mut rng = ChaCha8Rng::from_seed(SEED);
+    let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
+    Runtime::new().unwrap().block_on(
+        prm_original.lock().unwrap()
+        .add_obstacle(obstacle.clone(), 4)
+    );
+    
+    // Use a loop to create benchmarks for each number of threads
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
             BenchmarkId::new("Basic, Threads", num_threads),
@@ -87,14 +91,15 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {
-                        (Obstacle::new_random(&mut rng, WIDTH, HEIGHT))
+                        Runtime::new().unwrap().block_on(
+                            prm_original.lock().unwrap()
+                                .remove_obstacle(obstacle.clone(), num_threads));
                     },
-                    |(obstacle)| {
+                    |_| {
                         let prm = Arc::clone(&prm_original);
                         async move {
                             let mut prm = prm.lock().unwrap();
                             prm.add_obstacle(obstacle, num_threads).await;
-                            prm.remove_obstacle(obstacle, num_threads).await;
                         }
                     },
                     criterion::BatchSize::LargeInput,
@@ -102,8 +107,12 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
             },
         );
     }
-    // Use a loop to create benchmarks for each number of threads
+    // Create a new PRM with viable edges
     let mut prm_original = Arc::new(Mutex::new(precompute_prm(true)));
+    Runtime::new().unwrap().block_on(
+        prm_original.lock().unwrap()
+        .add_obstacle(obstacle.clone(), 4)
+    );
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
             BenchmarkId::new("Viable edges, Threads", num_threads),
@@ -111,13 +120,51 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {
-                        (Obstacle::new_random(&mut rng, WIDTH, HEIGHT))
+                        Runtime::new().unwrap().block_on(
+                            prm_original.lock().unwrap()
+                                .remove_obstacle(obstacle.clone(), num_threads));
                     },
-                    |(obstacle)| {
+                    |(_)| {
                         let prm = Arc::clone(&prm_original);
                         async move {
                             let mut prm = prm.lock().unwrap();
                             prm.add_obstacle(obstacle, num_threads).await;
+                        }
+                    },
+                    criterion::BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+    group.finish()
+}
+
+fn benchmark_remove_obstacle(c: &mut Criterion) {
+    let mut group = c.benchmark_group(format!(
+        "Parallel Obstacle Removal, {} Vertices",
+        VERTICES
+    ));
+    let mut rng = ChaCha8Rng::from_seed(SEED);
+    let obstacle = Obstacle::new_random(&mut rng, WIDTH, HEIGHT);
+    // Create a new PRM with viable edges
+    let mut prm_original = Arc::new(Mutex::new(precompute_prm(true)));
+
+    for &num_threads in &THREAD_LIST {
+        group.bench_with_input(
+            BenchmarkId::new("Viable edges, Threads", num_threads),
+            &num_threads,
+            |b, &num_threads| {
+                b.to_async(Runtime::new().unwrap()).iter_batched(
+                    || {
+                        Runtime::new().unwrap().block_on(
+                            prm_original.lock().unwrap()
+                            .add_obstacle(obstacle.clone(), 4)
+                        );
+                    },
+                    |(_)| {
+                        let prm = Arc::clone(&prm_original);
+                        async move {
+                            let mut prm = prm.lock().unwrap();
                             prm.remove_obstacle(obstacle, num_threads).await;
                         }
                     },
@@ -130,5 +177,5 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
 }
 
 // Define the criterion group and criterion main functions
-criterion_group!(prm_benchmarks, benchmark_parallel_prm, benchmark_add_obstacle);
+criterion_group!(prm_benchmarks, benchmark_parallel_prm, benchmark_remove_obstacle, benchmark_add_obstacle);
 criterion_main!(prm_benchmarks);
