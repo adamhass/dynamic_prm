@@ -1,0 +1,23 @@
+Implement A* struct + methods:
+    Two versions: 
+        1. Naive (on raw PRM data) 
+        2. Optimized (on prepared structure).
+    Lookup Benchmark: Compare lookups between random (free) points:
+        1. Get two random free points in PRM
+        2. Do shortest path.
+
+
+Implement Set-union:
+    Store blocked edges per obstacle. And add prepare / incremental prepare.
+
+    Prepare Benchmark variants:
+        1a. Full prepare simple.
+        1b. Full prepare blocked-per-obstacle.
+        2a. Incremental Bounded CRDT.
+        2b. Incremental Blocked-per-obstacle.
+
+App Deployment modes:
+    Edge Query + Compute single instance.
+    Edge Query + Cloud Offload Compute Large / Small instances
+    Edge Query + Edge Offload Compute Large instance
+    Edge Query + Edge Offload Compute Small instances
