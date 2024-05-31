@@ -6,6 +6,8 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::sync::Arc;
 use std::{env, time::Instant};
+use geo::{Contains, Intersects};
+use geo::{Line, Point, Rect};
 
 #[tokio::main]
 async fn main() {
@@ -21,7 +23,7 @@ async fn main() {
     let seed = Arc::new([0u8; 32]);
     let start_width = 150;
     let start_height = 150;
-    let start_num_vertices = 10000;
+    let start_num_vertices = 30000;
     let start_num_obstacles = 100;
     let iterations = 1;
     for i in 1..iterations + 1 {
@@ -45,7 +47,6 @@ async fn main() {
             cfg.use_viable_edges = true;
         }
         let mut prm = Prm::new(cfg, num_obstacles);
-        let new_obstacle: Obstacle = Obstacle::new((40.0, 40.0), (60.0, 60.0));
         prm.print();
         // Start timer
         let start_time = Instant::now();
@@ -57,27 +58,43 @@ async fn main() {
         let max_edge_length = prm.edges.iter().map(|e| e.length).reduce(f64::max);
         prm.print();
         println!("Duration (ms): {}", duration);
-        plot(format!("{}_new", i), &prm);
 
-        // Add new obstacle
-
+        let astar = Astar::new(prm.clone());
         let start_time = Instant::now();
-        prm.add_obstacle(new_obstacle.clone(), threads).await;
+        let start = prm.get_nearest((0.0, 0.0).into());
+        let end = prm.get_nearest((width as f64, height as f64).into());
+        let path = astar.run_basic_astar(start.index, end.index);
         let duration = start_time.elapsed().as_millis() as f64;
-        prm.print();
-        plot(format!("{}_added_obstacle", i), &prm);
+        if let Some((path, length)) = path {
+            println!("Found a basic path of length {} in (ms): {}", length, duration);
 
-        // Remove obstacle
-        // let remove_obstacle = prm.obstacles.obstacles.get(0).unwrap().clone();
-        let start_time = Instant::now();
-        prm.remove_obstacle(new_obstacle, threads).await;
-        let duration = start_time.elapsed().as_millis() as f64;
-        prm.print();
-        println!("Duration (ms): {}", duration);
-        plot(format!("{}_removed_obstacle", i), &prm);
+            plot(format!("{}_with_path", i), &prm, Some(path));
+        } else {
+            println!("Found NO path in (ms): {}", duration);
+            plot(format!("{}_with_path", i), &prm, None);
+        }
     }
 }
 
+async fn add_remove(mut prm: Prm, i: usize, threads: usize) {
+    let new_obstacle: Obstacle = Obstacle::new((40.0, 40.0), (60.0, 60.0));
+    plot(format!("{}_new", i), &prm, None);
+    // Add new obstacle
+    let start_time = Instant::now();
+    prm.add_obstacle(new_obstacle.clone(), threads).await;
+    let duration = start_time.elapsed().as_millis() as f64;
+    prm.print();
+    plot(format!("{}_added_obstacle", i), &prm, None);
+
+    // Remove obstacle
+    // let remove_obstacle = prm.obstacles.obstacles.get(0).unwrap().clone();
+    let start_time = Instant::now();
+    prm.remove_obstacle(new_obstacle, threads).await;
+    let duration = start_time.elapsed().as_millis() as f64;
+    prm.print();
+    println!("Duration (ms): {}", duration);
+    plot(format!("{}_removed_obstacle", i), &prm, None);
+}
 /*
     HELPER FUNCTIONS
 */
@@ -88,7 +105,7 @@ fn parse_env_var(name: &str) -> usize {
         .expect(&format!("Failed to parse environment variable {}", name))
 }
 
-fn plot(name: String, prm: &Prm) -> () {
+fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
     let filename = format!("output/{}.png", name);
     // Create a drawing area
     let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
@@ -130,6 +147,25 @@ fn plot(name: String, prm: &Prm) -> () {
         .unwrap()
         .label("Edge")
         .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLUE));
+
+    // Draw path 
+    if let Some(path) = path {
+        let style = GREEN;
+        style.stroke_width(25);
+        // Draw edges
+        let mut pv = path[0].clone();
+        chart
+            .draw_series(
+                path.iter().map(|v| {
+                    let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style.clone());
+                    pv = v.clone();
+                    e
+                }),
+            )
+            .unwrap()
+            .label("Edge")
+            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &GREEN));
+    }
 }
 
 /*

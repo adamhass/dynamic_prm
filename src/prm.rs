@@ -5,6 +5,7 @@ use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex, RwLock};
+use crate::prelude::*;
 
 const DIMENSIONS: usize = 2;
 pub const GAMMA: f64 = 12.0 * 2.49;
@@ -63,6 +64,20 @@ impl Prm {
                 cfg,
             }
         }
+    }
+
+    pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
+        let mut min_distance = f64::MAX;
+        let mut nearest = self.vertices[0].clone();
+        for v in self.vertices.iter() {
+            let distance = v.point.euclidean_distance(&point);
+            if distance < min_distance &&
+                !self.obstacles.contains(&v.point) {
+                min_distance = distance;
+                nearest = v.clone();
+            }
+        }
+        nearest
     }
 
     pub fn print(&self) {
@@ -262,9 +277,9 @@ impl Prm {
         let mut viable_edges = Vec::new();
         for i in start..end {
             let p1 = vertices[i];
-            if self.obstacles.contains(&p1) && !self.cfg.use_viable_edges {
-                continue;
-            }
+            // if self.obstacles.contains(&p1) && !self.cfg.use_viable_edges {
+            //    continue;
+            //}
             vs.push(Vertex {
                 point: p1,
                 index: i,
@@ -329,94 +344,5 @@ impl Prm {
             }
         }
         (all_vertices, all_edges, all_viable_edges)
-    }
-}
-
-#[derive(Clone)]
-pub struct Edge {
-    pub line: Line<f64>,
-    pub length: f64,
-    pub points: (usize, usize),
-}
-
-impl PartialEq for Edge {
-    fn eq(&self, other: &Self) -> bool {
-        self.points == other.points
-    }
-}
-
-#[derive(Clone)]
-pub struct Vertex {
-    pub point: Point<f64>,
-    pub index: usize,
-}
-
-#[derive(Clone, Copy)]
-pub struct Obstacle {
-    pub rect: Rect<f64>,
-}
-
-impl PartialEq for Obstacle {
-    fn eq(&self, other: &Self) -> bool {
-        self.rect.min() == other.rect.min() && self.rect.max() == other.rect.max()
-    }
-}
-
-impl Obstacle {
-    pub fn new_random(rng: &mut ChaCha8Rng, w: usize, h: usize) -> Obstacle {
-        let x_min = rng.gen_range(0.0..(w as f64 - 1.0)) as f64;
-        let y_min = rng.gen_range(0.0..(h as f64 - 1.0)) as f64;
-        let width = rng.gen_range(1.0..(w as f64 / 10.0)) as f64;
-        let height = rng.gen_range(1.0..(h as f64 / 10.0)) as f64;
-        let rect = Rect::new((x_min, y_min), (x_min + width, y_min + height));
-        Obstacle { rect }
-    }
-
-    pub fn new(c1: (f64, f64), c2: (f64, f64)) -> Obstacle {
-        Obstacle {
-            rect: Rect::new(c1, c2),
-        }
-    }
-
-    fn contains(&self, point: &Point<f64>) -> bool {
-        self.rect.contains(point)
-    }
-
-    fn intersects(&self, edge: &Line<f64>) -> bool {
-        self.rect.intersects(edge)
-    }
-
-    pub fn rectangle(&self) -> Rectangle<(f64, f64)> {
-        Rectangle::new(
-            [self.rect.min().x_y(), self.rect.max().x_y()],
-            (&RED).filled(),
-        )
-    }
-}
-
-#[derive(Clone)]
-pub struct ObstacleSet {
-    pub obstacles: Vec<Obstacle>,
-}
-
-impl ObstacleSet {
-    pub fn new_random(n: usize, width: usize, height: usize, rng: &mut ChaCha8Rng) -> ObstacleSet {
-        let mut obstacles = Vec::new();
-        while obstacles.len() < n {
-            obstacles.push(Obstacle::new_random(rng, width, height));
-        }
-        ObstacleSet { obstacles }
-    }
-
-    pub fn contains(&self, point: &Point<f64>) -> bool {
-        self.obstacles.iter().any(|o| o.contains(point))
-    }
-
-    pub fn intersects(&self, edge: &Line<f64>) -> bool {
-        self.obstacles.iter().any(|o| o.intersects(edge))
-    }
-
-    pub fn remove(&mut self, obstacle: &Obstacle) {
-        self.obstacles.retain(|o| o != obstacle);
     }
 }
