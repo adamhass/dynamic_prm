@@ -21,9 +21,9 @@ async fn main() {
     */
     let threads: usize = 4;
     let seed = Arc::new([0u8; 32]);
-    let start_width = 150;
-    let start_height = 150;
-    let start_num_vertices = 30000;
+    let start_width = 100;
+    let start_height = 100;
+    let start_num_vertices = 10000;
     let start_num_obstacles = 100;
     let iterations = 1;
     for i in 1..iterations + 1 {
@@ -59,7 +59,7 @@ async fn main() {
         prm.print();
         println!("Duration (ms): {}", duration);
 
-        let astar = Astar::new(prm.clone());
+        let mut astar = Astar::new(prm.clone());
         let start_time = Instant::now();
         let start = prm.get_nearest((0.0, 0.0).into());
         let end = prm.get_nearest((width as f64, height as f64).into());
@@ -71,7 +71,21 @@ async fn main() {
             plot(format!("{}_with_path", i), &prm, Some(path));
         } else {
             println!("Found NO path in (ms): {}", duration);
-            plot(format!("{}_with_path", i), &prm, None);
+            plot(format!("{}_with_no_path", i), &prm, None);
+        }
+        astar.optimized = true;
+        let start_time = Instant::now();
+        let start = prm.get_nearest((0.0, 0.0).into());
+        let end = prm.get_nearest((width as f64, height as f64).into());
+        let path = astar.run_basic_astar(start.index, end.index);
+        let duration = start_time.elapsed().as_millis() as f64;
+        if let Some((path, length)) = path {
+            println!("Found a basic path of length {} in (ms): {}", length, duration);
+
+            plot(format!("{}_with_path_optimized", i), &prm, Some(path));
+        } else {
+            println!("Found NO path in (ms): {}", duration);
+            plot(format!("{}_with_no_path", i), &prm, None);
         }
     }
 }

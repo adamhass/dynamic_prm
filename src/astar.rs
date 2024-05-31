@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::prelude::*;
 use geo::EuclideanDistance;
 use pathfinding::directed::astar::astar;
@@ -7,6 +9,7 @@ pub type AstarPath = (Vec<Vertex>, usize);
 pub struct Astar{
     pub prm: Prm,
     pub optimized: bool,
+    pub neighbours: Vec<Vec<(usize, usize)>>,
 }
 
 impl Astar {
@@ -14,7 +17,14 @@ impl Astar {
         Astar {
             prm,
             optimized: false,
+            neighbours: Vec::new(),
         }
+    }
+
+    pub fn init_neighbours(&mut self) {
+        self.neighbours = (0..self.prm.vertices.len())
+            .map(|i| (self.basic_successors(&i)))
+            .collect();
     }
 
     pub fn run_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
@@ -62,9 +72,25 @@ impl Astar {
         self.prm.vertices[start].point.euclidean_distance(&self.prm.vertices[end].point).round() as usize
     }
 
+    fn successors(&self, start: &usize) -> Vec<(usize, usize)> {
+        // Get the successors
+        self.neighbours[*start].clone()
+    }
+
     pub fn run_optimized_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
-        todo!();
-        // Run the optimized A* algorithm
-        // Use the optimized A* algorithm
+         // Run the basic A* algorithm
+        if let Some((path, length)) = astar(
+            &start.index,
+            |v| self.successors(v),
+            |v| self.heuristic(*v, end.index),
+            |v| *v == end.index,
+        ) {
+            let mut ret = Vec::new();
+            for i in path {
+                ret.push(self.prm.vertices[i].clone());
+            }
+            return Some((ret, length));
+        }
+        None
     }
 }

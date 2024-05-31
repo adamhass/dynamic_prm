@@ -4,7 +4,7 @@ use geo::{Contains, EuclideanDistance, Intersects, Line, Point, Rect};
 use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
-use std::sync::{Arc, Mutex, RwLock};
+use std::{collections::HashMap, sync::{Arc, Mutex, RwLock}};
 use crate::prelude::*;
 
 const DIMENSIONS: usize = 2;
@@ -47,6 +47,7 @@ pub struct Prm {
     pub edges: Arc<Vec<Edge>>,
     pub viable_edges: Arc<Vec<Edge>>,
     pub obstacles: Arc<ObstacleSet>,
+    pub blocked_per_obstacle: Arc<HashMap<usize, Vec<usize>>>,
     pub cfg: PrmConfig,
 }
 
@@ -61,6 +62,7 @@ impl Prm {
                 edges: Arc::new(Vec::new().into()),
                 viable_edges: Arc::new(Vec::new().into()),
                 obstacles,
+                blocked_per_obstacle: Arc::new(HashMap::new()),
                 cfg,
             }
         }
@@ -163,13 +165,13 @@ impl Prm {
     }
 
     pub async fn add_obstacle(&mut self, obstacle: Obstacle, num_threads: usize) -> () {
-        let remove_edges = self.remove_edges(obstacle, num_threads).await;
+        let blocked_edges = self.remove_edges(obstacle, num_threads).await;
         // println!("Removing {} edges", remove_edges.len());
         let mut edges = (*self.edges).clone();
-        edges.retain(|e| !&remove_edges.contains(e));
+        edges.retain(|e| !&blocked_edges.contains(e));
         if self.cfg.use_viable_edges {
             let mut viable_edges = (*self.viable_edges).clone();
-            viable_edges.extend(remove_edges);
+            viable_edges.extend(blocked_edges);
             self.viable_edges = Arc::new(viable_edges);
         }
         self.edges = Arc::new(edges);

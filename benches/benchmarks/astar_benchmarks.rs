@@ -41,12 +41,48 @@ fn get_random_points(rng: &mut ChaCha8Rng) -> (Point, Point) {
 // Define a function to benchmark `parallel_prm`
 fn benchmark_astar(c: &mut Criterion) {
     let mut group = c.benchmark_group(format!("Astar {} Vertices", VERTICES));
-    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
     let prm = precompute_prm(false);
-    let astar = Astar::new(prm.clone());
-        
+    let mut astar = Astar::new(prm.clone());
+    astar.init_neighbours();
+    astar.optimized = true;
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
+    group.bench_function(
+        BenchmarkId::new("Optimized", 0),
+        |b| {
+            b.iter(|| {
+                let (start, end) = get_random_points(&mut rng);
+                let start = prm.get_nearest(start);
+                let end = prm.get_nearest(end);
+                astar.run_astar(start, end)
+            });
+        },
+    );
+
+    astar.optimized = false;
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
     group.bench_function(
         BenchmarkId::new("Basic", 0),
+        |b| {
+            b.iter(|| {
+                let (start, end) = get_random_points(&mut rng);
+                let start = prm.get_nearest(start);
+                let end = prm.get_nearest(end);
+                astar.run_astar(start, end)
+            });
+        },
+    );
+}
+
+// Define a function to benchmark `parallel_prm`
+fn benchmark_astar_updates(c: &mut Criterion) {
+    let mut group = c.benchmark_group(format!("Astar {} Vertices", VERTICES));
+    let prm = precompute_prm(false);
+    let mut astar = Astar::new(prm.clone());
+    astar.init_neighbours();
+    astar.optimized = true;
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
+    group.bench_function(
+        BenchmarkId::new("Optimized", 0),
         |b| {
             b.iter(|| {
                 let (start, end) = get_random_points(&mut rng);
