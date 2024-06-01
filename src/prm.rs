@@ -41,13 +41,13 @@ impl PrmConfig {
     }
 }
 
+// Prm Shuffles edges from 'viable' to 'edges' back and forth
 #[derive(Clone)]
 pub struct Prm {
     pub vertices: Arc<Vec<Vertex>>,
     pub edges: Arc<Vec<Edge>>,
     pub viable_edges: Arc<Vec<Edge>>,
     pub obstacles: Arc<ObstacleSet>,
-    pub blocked_per_obstacle: Arc<HashMap<usize, Vec<usize>>>,
     pub cfg: PrmConfig,
 }
 
@@ -62,7 +62,6 @@ impl Prm {
                 edges: Arc::new(Vec::new().into()),
                 viable_edges: Arc::new(Vec::new().into()),
                 obstacles,
-                blocked_per_obstacle: Arc::new(HashMap::new()),
                 cfg,
             }
         }
@@ -341,7 +340,7 @@ impl Prm {
                     all_viable_edges.extend(viable_edges);
                 }
                 Err(e) => {
-                    // eprintln!("Error: {:?}", e);
+                    eprintln!("Error: {:?}", e);
                 }
             }
         }

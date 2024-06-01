@@ -48,6 +48,21 @@ async fn main() {
         }
         let mut prm = Prm::new(cfg, num_obstacles);
         prm.print();
+        // Run the experiment
+        let mut dprm = DPrm::new(prm);
+        // Start timer
+        let start_time = Instant::now();
+        // Do parallel PRM
+        dprm.generate_viable_edges_and_vertices(threads).await;
+        dprm.find_all_blocked(threads).await;
+        // End timer, convert to ms
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Duration (ms): {}", duration);
+        let prm = dprm.get_prm();
+        prm.print();
+        plot(format!("{}_dprm", i), &prm, None);
+        /*
+        
         // Start timer
         let start_time = Instant::now();
         // Do parallel PRM
@@ -86,7 +101,8 @@ async fn main() {
         } else {
             println!("Found NO path in (ms): {}", duration);
             plot(format!("{}_with_no_path", i), &prm, None);
-        }
+        } 
+         */
     }
 }
 

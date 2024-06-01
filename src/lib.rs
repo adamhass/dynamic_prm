@@ -1,19 +1,26 @@
 #![allow(unused)]
 mod prm;
 mod astar;
+mod dprm;
 pub mod prelude {
     pub use crate::prm::*;
     pub use crate::astar::*;
+    pub use crate::dprm::*;
     use geo::{Contains, Intersects};
     use geo::{Line, Point, Rect};
     use plotters::prelude::*;
     use rand_chacha::ChaCha8Rng;
     use rand::{prelude::*, seq::index};
+    
+    pub type EdgeIndex = usize;
+    pub type VertexIndex = usize;
+    pub type ObstacleId = u128;
+
     #[derive(Clone)]
     pub struct Edge {
         pub line: Line<f64>,
         pub length: f64,
-        pub points: (usize, usize),
+        pub points: (VertexIndex, VertexIndex),
     }
 
     impl PartialEq for Edge {
@@ -25,12 +32,13 @@ pub mod prelude {
     #[derive(Clone)]
     pub struct Vertex {
         pub point: Point<f64>,
-        pub index: usize,
+        pub index: VertexIndex,
     }
 
     #[derive(Clone, Copy)]
     pub struct Obstacle {
         pub rect: Rect<f64>,
+        id: ObstacleId
     }
 
     impl PartialEq for Obstacle {
@@ -46,13 +54,18 @@ pub mod prelude {
             let width = rng.gen_range(1.0..(w as f64 / 10.0)) as f64;
             let height = rng.gen_range(1.0..(h as f64 / 10.0)) as f64;
             let rect = Rect::new((x_min, y_min), (x_min + width, y_min + height));
-            Obstacle { rect }
+            Obstacle { rect, id: rng.gen_range(0..u128::MAX)}
         }
 
         pub fn new(c1: (f64, f64), c2: (f64, f64)) -> Obstacle {
             Obstacle {
                 rect: Rect::new(c1, c2),
+                id: 0,
             }
+        }
+
+        pub fn id(&self) -> ObstacleId {
+            self.id
         }
 
         fn contains(&self, point: &Point<f64>) -> bool {
