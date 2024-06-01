@@ -8,11 +8,11 @@ use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-const VERTICES: usize = 10000;
+const VERTICES: usize = 30000;
 const THREAD_LIST: [usize; 7] = [1, 2, 4, 8, 16, 32, 64];
-const OBSTACLES: usize = 50;
-const WIDTH: usize = 100;
-const HEIGHT: usize = 100;
+const OBSTACLES: usize = 100;
+const WIDTH: usize = 150;
+const HEIGHT: usize = 150;
 const SEED: [u8; 32] = [0u8; 32];
 const OTHER_SEED: [u8; 32] = [1u8; 32];
 
@@ -51,7 +51,7 @@ fn benchmark_parallel_prm(c: &mut Criterion) {
         let mut prm = init_prm();
         prm.cfg.use_viable_edges = true;
         group.bench_with_input(
-            BenchmarkId::new("Viable edges, Threads", num_threads),
+            BenchmarkId::new("VE, Threads", num_threads),
             &num_threads,
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter(|| {
@@ -89,7 +89,7 @@ fn benchmark_add_obstacle(c: &mut Criterion) {
     for &num_threads in &THREAD_LIST {
         let prm = precompute_prm(true);
         group.bench_with_input(
-            BenchmarkId::new("Basic, Threads", num_threads),
+            BenchmarkId::new("VE, Threads", num_threads),
             &num_threads,
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter(|| {
@@ -119,7 +119,7 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
 
     for &num_threads in &THREAD_LIST {
         group.bench_with_input(
-            BenchmarkId::new("Viable edges, Threads", num_threads),
+            BenchmarkId::new("VE, Threads", num_threads),
             &num_threads,
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
@@ -137,6 +137,7 @@ fn benchmark_remove_obstacle(c: &mut Criterion) {
 criterion_group!(
     prm_benchmarks,
     benchmark_remove_obstacle,
-    benchmark_add_obstacle
+    benchmark_add_obstacle,
+    benchmark_parallel_prm
 ); // benchmark_parallel_prm
 criterion_main!(prm_benchmarks);
