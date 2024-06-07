@@ -7,9 +7,10 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
+use geo::Point;
 
 const VERTICES: usize = 30000; // 10000;
-const THREAD_LIST: [usize; 3] = [4, 8, 16];
+const THREAD_LIST: [usize; 4] = [1, 4, 8, 16];
 const OBSTACLES: usize = 100;
 const WIDTH: usize = 150;
 const HEIGHT: usize = 150;
@@ -20,6 +21,14 @@ fn init_dprm() -> DPrm {
     // Parameters common to all benchmarks:
     let cfg = PrmConfig::new(VERTICES, WIDTH, HEIGHT, SEED);
     DPrm::new(Prm::new(cfg, OBSTACLES))
+}
+
+fn get_random_points(rng: &mut ChaCha8Rng) -> (Point, Point) {
+    let x1 = rng.gen_range(0.0..WIDTH as f64);
+    let y1 = rng.gen_range(0.0..HEIGHT as f64);
+    let x2 = rng.gen_range(0.0..WIDTH as f64);
+    let y2 = rng.gen_range(0.0..HEIGHT as f64);
+    (Point::new(x1, y1), Point::new(x2, y2))
 }
 
 fn benchmark_steps(c: &mut Criterion) {
@@ -64,6 +73,21 @@ fn benchmark_steps(c: &mut Criterion) {
             },
         );
     }
+    let mut astar = Astar::new(dprm.clone());
+    astar.init_neighbours();
+    astar.optimized = true;
+    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
+    group.bench_function(
+        BenchmarkId::new("Optimized", 0),
+        |b| {
+            b.iter(|| {
+                let (start, end) = get_random_points(&mut rng);
+                let start = dprm.get_nearest(start);
+                let end = dprm.get_nearest(end);
+                astar.run_astar(start, end)
+            });
+        },
+    );
 }
 
 
