@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use geo::Point;
 
-const VERTICES: usize = 30000; // 10000;
-const THREAD_LIST: [usize; 4] = [1, 4, 8, 16];
+const VERTICES: usize = 1000000; // 10000;
+const THREAD_LIST: [usize; 2] = [8, 16];
 const OBSTACLES: usize = 100;
-const WIDTH: usize = 150;
-const HEIGHT: usize = 150;
+const WIDTH: usize = 1000;
+const HEIGHT: usize = 1000;
 const SEED: [u8; 32] = [0u8; 32];
 const OTHER_SEED: [u8; 32] = [1u8; 32];
 
