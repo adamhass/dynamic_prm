@@ -4,6 +4,7 @@ use dynamic_prm::prelude::*;
 use plotters::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use std::io::{stdin, Stdin};
 use std::sync::Arc;
 use std::{env, time::Instant};
 use geo::{Contains, Intersects};
@@ -53,14 +54,19 @@ async fn main() {
         // Start timer
         let start_time = Instant::now();
         // Do parallel PRM
-        dprm.generate_viable_edges_and_vertices(threads).await;
-        dprm.find_all_blocked(threads).await;
+        dprm.update_viable_edges_and_vertices(threads).await;
+        dprm.update_all_blocked(threads).await;
         // End timer, convert to ms
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Duration (ms): {}", duration);
-        let prm = dprm.get_prm();
-        prm.print();
-        plot(format!("{}_dprm", i), &prm, None);
+        dprm.print();
+        let astar = Astar::new(dprm.clone());
+        let start = dprm.get_nearest(Point::new(0.0, height as f64));
+        let end = dprm.get_nearest(Point::new(width as f64, 0.0));
+        let path = astar.run_astar(start, end);
+        println!("{}", path.is_some());
+        dprm.plot(format!("{}_dprm", i), path);
+        println!("Waiting for stdin");
         /*
         
         // Start timer
@@ -172,6 +178,17 @@ fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
         .draw_series(
             prm.edges.iter().map(|edge| {
                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &BLUE)
+            }),
+        )
+        .unwrap()
+        .label("Edge")
+        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLUE));
+
+    // Draw viable edges
+    chart
+        .draw_series(
+            prm.viable_edges.iter().map(|edge| {
+                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &RED)
             }),
         )
         .unwrap()

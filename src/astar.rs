@@ -5,15 +5,15 @@ use geo::EuclideanDistance;
 use pathfinding::directed::astar::astar;
 
 pub type AstarPath = (Vec<Vertex>, usize);
-
+pub type Distance = usize;
 pub struct Astar{
-    pub prm: Prm,
+    pub prm: DPrm,
     pub optimized: bool,
-    pub neighbours: Vec<Vec<(usize, usize)>>,
+    pub neighbours: Vec<Vec<(VertexIndex, Distance)>>,
 }
 
 impl Astar {
-    pub fn new(prm: Prm) -> Self {
+    pub fn new(prm: DPrm) -> Self {
         Astar {
             prm,
             optimized: false,
@@ -37,7 +37,7 @@ impl Astar {
         }
     }
 
-    pub fn run_basic_astar(&self, start: usize, end: usize) -> Option<AstarPath> {
+    pub fn run_basic_astar(&self, start: VertexIndex, end: VertexIndex) -> Option<AstarPath> {
         // Run the basic A* algorithm
         if let Some((path, length)) = astar(
             &start,
@@ -54,25 +54,25 @@ impl Astar {
         None
     }
 
-    pub fn basic_successors(&self, start: &usize) -> Vec<(usize, usize)> {
+    pub fn basic_successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
         // Get the basic successors
         let mut successors = Vec::new();
         for e in self.prm.edges.iter() {
             if e.points.0 == *start {
-                successors.push((e.points.1, e.length.round() as usize));
+                successors.push((e.points.1, e.length.round() as Distance));
             } else if e.points.1 == *start {
-                successors.push((e.points.0, e.length.round() as usize));
+                successors.push((e.points.0, e.length.round() as Distance));
             }
         }
         successors
     }
 
-    pub fn heuristic(&self, start: usize, end: usize) -> usize {
+    pub fn heuristic(&self, start: VertexIndex, end: VertexIndex) -> Distance {
         // Get the heuristic
-        self.prm.vertices[start].point.euclidean_distance(&self.prm.vertices[end].point).round() as usize
+        self.prm.vertices[start].point.euclidean_distance(&self.prm.vertices[end].point).round() as Distance
     }
 
-    fn successors(&self, start: &usize) -> Vec<(usize, usize)> {
+    fn successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
         // Get the successors
         self.neighbours[*start].clone()
     }

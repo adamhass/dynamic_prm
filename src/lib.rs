@@ -79,7 +79,7 @@ pub mod prelude {
         pub fn rectangle(&self) -> Rectangle<(f64, f64)> {
             Rectangle::new(
                 [self.rect.min().x_y(), self.rect.max().x_y()],
-                (&RED).filled(),
+                (&MAGENTA).filled(),
             )
         }
     }
