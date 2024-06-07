@@ -2,6 +2,7 @@
 mod prm;
 mod astar;
 mod dprm;
+mod server;
 pub mod prelude {
     pub use crate::prm::*;
     pub use crate::astar::*;
@@ -11,7 +12,7 @@ pub mod prelude {
     use plotters::prelude::*;
     use rand_chacha::ChaCha8Rng;
     use rand::{prelude::*, seq::index};
-    
+    pub use crate::server::*;
     pub type EdgeIndex = usize;
     pub type VertexIndex = usize;
     pub type ObstacleId = u128;

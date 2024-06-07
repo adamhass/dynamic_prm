@@ -41,8 +41,9 @@ fn get_random_points(rng: &mut ChaCha8Rng) -> (Point, Point) {
 // Define a function to benchmark `parallel_prm`
 fn benchmark_astar(c: &mut Criterion) {
     let mut group = c.benchmark_group(format!("Astar {} Vertices", VERTICES));
-    let prm = precompute_prm(false);
-    let mut astar = Astar::new(prm.clone());
+    let mut prm = precompute_prm(false);
+    let dprm = DPrm::new(prm.clone());
+    let mut astar = Astar::new(dprm.clone());
     astar.init_neighbours();
     astar.optimized = true;
     let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
@@ -76,8 +77,9 @@ fn benchmark_astar(c: &mut Criterion) {
 // Define a function to benchmark `parallel_prm`
 fn benchmark_astar_updates(c: &mut Criterion) {
     let mut group = c.benchmark_group(format!("Astar {} Vertices", VERTICES));
-    let prm = precompute_prm(false);
-    let mut astar = Astar::new(prm.clone());
+    let mut prm = precompute_prm(false);
+    let dprm = DPrm::new(prm.clone());
+    let mut astar = Astar::new(dprm.clone());
     astar.init_neighbours();
     astar.optimized = true;
     let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
