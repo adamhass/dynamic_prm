@@ -1,17 +1,17 @@
 #![allow(unused)]
-mod prm;
 mod astar;
 mod dprm;
+mod prm;
 pub mod prelude {
-    pub use crate::prm::*;
     pub use crate::astar::*;
     pub use crate::dprm::*;
+    pub use crate::prm::*;
     use geo::{Contains, Intersects};
     use geo::{Line, Point, Rect};
     use plotters::prelude::*;
-    use rand_chacha::ChaCha8Rng;
     use rand::{prelude::*, seq::index};
-    
+    use rand_chacha::ChaCha8Rng;
+
     pub type EdgeIndex = usize;
     pub type VertexIndex = usize;
     pub type ObstacleId = u128;
@@ -38,7 +38,7 @@ pub mod prelude {
     #[derive(Clone, Copy)]
     pub struct Obstacle {
         pub rect: Rect<f64>,
-        id: ObstacleId
+        id: ObstacleId,
     }
 
     impl PartialEq for Obstacle {
@@ -54,7 +54,10 @@ pub mod prelude {
             let width = rng.gen_range(1.0..(w as f64 / 10.0));
             let height = rng.gen_range(1.0..(h as f64 / 10.0));
             let rect = Rect::new((x_min, y_min), (x_min + width, y_min + height));
-            Obstacle { rect, id: rng.gen_range(0..u128::MAX)}
+            Obstacle {
+                rect,
+                id: rng.gen_range(0..u128::MAX),
+            }
         }
 
         pub fn new(c1: (f64, f64), c2: (f64, f64)) -> Obstacle {
@@ -90,7 +93,12 @@ pub mod prelude {
     }
 
     impl ObstacleSet {
-        pub fn new_random(n: usize, width: usize, height: usize, rng: &mut ChaCha8Rng) -> ObstacleSet {
+        pub fn new_random(
+            n: usize,
+            width: usize,
+            height: usize,
+            rng: &mut ChaCha8Rng,
+        ) -> ObstacleSet {
             let mut obstacles = Vec::new();
             while obstacles.len() < n {
                 obstacles.push(Obstacle::new_random(rng, width, height));

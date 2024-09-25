@@ -1,14 +1,14 @@
 #![allow(unused)]
 // use pathfinding::directed::astar::astar;
 use dynamic_prm::prelude::*;
+use geo::{Contains, Intersects};
+use geo::{Line, Point, Rect};
 use plotters::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::io::{stdin, Stdin};
 use std::sync::Arc;
 use std::{env, time::Instant};
-use geo::{Contains, Intersects};
-use geo::{Line, Point, Rect};
 
 #[tokio::main]
 async fn main() {
@@ -68,7 +68,7 @@ async fn main() {
         dprm.plot(format!("{}_dprm", i), path);
         println!("Waiting for stdin");
         /*
-        
+
         // Start timer
         let start_time = Instant::now();
         // Do parallel PRM
@@ -107,7 +107,7 @@ async fn main() {
         } else {
             println!("Found NO path in (ms): {}", duration);
             plot(format!("{}_with_no_path", i), &prm, None);
-        } 
+        }
          */
     }
 }
@@ -195,20 +195,18 @@ fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) {
         .label("Edge")
         .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
 
-    // Draw path 
+    // Draw path
     if let Some(path) = path {
         let style = GREEN;
         style.stroke_width(25);
         // Draw edges
         let mut pv = path[0].clone();
         chart
-            .draw_series(
-                path.iter().map(|v| {
-                    let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style);
-                    pv = v.clone();
-                    e
-                }),
-            )
+            .draw_series(path.iter().map(|v| {
+                let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style);
+                pv = v.clone();
+                e
+            }))
             .unwrap()
             .label("Edge")
             .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], GREEN));

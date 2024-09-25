@@ -39,7 +39,9 @@ fn benchmark_steps(c: &mut Criterion) {
                 );
             },
         );
-        Runtime::new().unwrap().block_on(dprm.update_viable_edges_and_vertices(4));
+        Runtime::new()
+            .unwrap()
+            .block_on(dprm.update_viable_edges_and_vertices(4));
         group.bench_with_input(
             BenchmarkId::new("Find all blocked, Threads", num_threads),
             &num_threads,
@@ -58,7 +60,12 @@ fn benchmark_steps(c: &mut Criterion) {
             |b, &num_threads| {
                 b.to_async(Runtime::new().unwrap()).iter_batched(
                     || {},
-                    |_| dprm.find_blocked_by_obstacle(Obstacle::new_random(&mut rng, WIDTH, HEIGHT), num_threads),
+                    |_| {
+                        dprm.find_blocked_by_obstacle(
+                            Obstacle::new_random(&mut rng, WIDTH, HEIGHT),
+                            num_threads,
+                        )
+                    },
                     criterion::BatchSize::SmallInput,
                 );
             },
@@ -66,10 +73,6 @@ fn benchmark_steps(c: &mut Criterion) {
     }
 }
 
-
 // Define the criterion group and criterion main functions
-criterion_group!(
-    dprm_benchmarks,
-    benchmark_steps,
-); // benchmark_parallel_prm
+criterion_group!(dprm_benchmarks, benchmark_steps,); // benchmark_parallel_prm
 criterion_main!(dprm_benchmarks);

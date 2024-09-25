@@ -6,7 +6,7 @@ use pathfinding::directed::astar::astar;
 
 pub type AstarPath = (Vec<Vertex>, usize);
 pub type Distance = usize;
-pub struct Astar{
+pub struct Astar {
     pub prm: DPrm,
     pub optimized: bool,
     pub neighbours: Vec<Vec<(VertexIndex, Distance)>>,
@@ -69,7 +69,10 @@ impl Astar {
 
     pub fn heuristic(&self, start: VertexIndex, end: VertexIndex) -> Distance {
         // Get the heuristic
-        self.prm.vertices[start].point.euclidean_distance(&self.prm.vertices[end].point).round() as Distance
+        self.prm.vertices[start]
+            .point
+            .euclidean_distance(&self.prm.vertices[end].point)
+            .round() as Distance
     }
 
     fn successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
@@ -78,7 +81,7 @@ impl Astar {
     }
 
     pub fn run_optimized_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
-         // Run the basic A* algorithm
+        // Run the basic A* algorithm
         if let Some((path, length)) = astar(
             &start.index,
             |v| self.successors(v),

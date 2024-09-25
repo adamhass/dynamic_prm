@@ -17,17 +17,21 @@ const HEIGHT: usize = 150;
 const SEED: [u8; 32] = [0u8; 32];
 const OTHER_SEED: [u8; 32] = [1u8; 32];
 
-fn init_prm() -> Prm {
+fn init_dprm() -> DPrm {
     // Parameters common to all benchmarks:
     let cfg = PrmConfig::new(VERTICES, WIDTH, HEIGHT, SEED);
-    Prm::new(cfg, OBSTACLES)
+    DPrm::new(Prm::new(cfg, OBSTACLES))
 }
 
-fn precompute_prm(viable_edges: bool) -> Prm {
-    let mut prm = init_prm();
-    prm.cfg.use_viable_edges = viable_edges;
-    Runtime::new().unwrap().block_on(prm.compute(4));
-    prm
+fn precompute_prm(viable_edges: bool) -> DPrm {
+    let mut dprm = init_dprm();
+    dprm.cfg.use_viable_edges = viable_edges;
+    // Runtime::new().unwrap().block_on(dprm.compute(4));
+    Runtime::new()
+        .unwrap()
+        .block_on(dprm.update_viable_edges_and_vertices(4));
+    Runtime::new().unwrap().block_on(dprm.update_all_blocked(4));
+    dprm
 }
 
 fn get_random_points(rng: &mut ChaCha8Rng) -> (Point, Point) {
@@ -46,31 +50,25 @@ fn benchmark_astar(c: &mut Criterion) {
     astar.init_neighbours();
     astar.optimized = true;
     let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
-    group.bench_function(
-        BenchmarkId::new("Optimized", 0),
-        |b| {
-            b.iter(|| {
-                let (start, end) = get_random_points(&mut rng);
-                let start = prm.get_nearest(start);
-                let end = prm.get_nearest(end);
-                astar.run_astar(start, end)
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("Optimized", 0), |b| {
+        b.iter(|| {
+            let (start, end) = get_random_points(&mut rng);
+            let start = prm.get_nearest(start);
+            let end = prm.get_nearest(end);
+            astar.run_astar(start, end)
+        });
+    });
 
     astar.optimized = false;
     let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
-    group.bench_function(
-        BenchmarkId::new("Basic", 0),
-        |b| {
-            b.iter(|| {
-                let (start, end) = get_random_points(&mut rng);
-                let start = prm.get_nearest(start);
-                let end = prm.get_nearest(end);
-                astar.run_astar(start, end)
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("Basic", 0), |b| {
+        b.iter(|| {
+            let (start, end) = get_random_points(&mut rng);
+            let start = prm.get_nearest(start);
+            let end = prm.get_nearest(end);
+            astar.run_astar(start, end)
+        });
+    });
 }
 
 // Define a function to benchmark `parallel_prm`
@@ -81,21 +79,15 @@ fn benchmark_astar_updates(c: &mut Criterion) {
     astar.init_neighbours();
     astar.optimized = true;
     let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
-    group.bench_function(
-        BenchmarkId::new("Optimized", 0),
-        |b| {
-            b.iter(|| {
-                let (start, end) = get_random_points(&mut rng);
-                let start = prm.get_nearest(start);
-                let end = prm.get_nearest(end);
-                astar.run_astar(start, end)
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("Optimized", 0), |b| {
+        b.iter(|| {
+            let (start, end) = get_random_points(&mut rng);
+            let start = prm.get_nearest(start);
+            let end = prm.get_nearest(end);
+            astar.run_astar(start, end)
+        });
+    });
 }
 
-criterion_group!(
-    astar_benchmarks,
-    benchmark_astar,
-);
+criterion_group!(astar_benchmarks, benchmark_astar,);
 criterion_main!(astar_benchmarks);

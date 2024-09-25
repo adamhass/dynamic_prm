@@ -1,11 +1,14 @@
 #![allow(unused)]
 use geo::{Contains, EuclideanDistance, Intersects, Line, Point, Rect};
 // use pathfinding::directed::astar::astar;
+use crate::prelude::*;
 use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
-use std::{collections::HashMap, sync::{Arc, Mutex, RwLock}};
-use crate::prelude::*;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, RwLock},
+};
 
 const DIMENSIONS: usize = 2;
 pub const GAMMA: f64 = 12.0 * 2.49;
@@ -72,8 +75,7 @@ impl Prm {
         let mut nearest = self.vertices[0].clone();
         for v in self.vertices.iter() {
             let distance = v.point.euclidean_distance(&point);
-            if distance < min_distance &&
-                !self.obstacles.contains(&v.point) {
+            if distance < min_distance && !self.obstacles.contains(&v.point) {
                 min_distance = distance;
                 nearest = v.clone();
             }

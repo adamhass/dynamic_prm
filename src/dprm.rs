@@ -1,11 +1,15 @@
 #![allow(unused)]
 use geo::{Contains, EuclideanDistance, Intersects, Line, Point, Rect};
 // use pathfinding::directed::astar::astar;
+use crate::prelude::*;
 use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
-use std::{collections::HashMap, f64::consts::PI, sync::{Arc, Mutex, RwLock}};
-use crate::prelude::*;
+use std::{
+    collections::HashMap,
+    f64::consts::PI,
+    sync::{Arc, Mutex, RwLock},
+};
 
 const DIMENSIONS: usize = 2;
 
@@ -55,15 +59,15 @@ impl DPrm {
 
     fn max_radius(&self) -> f64 {
         let d = DIMENSIONS as f64;
-        let id = 1.0/d;
+        let id = 1.0 / d;
         let n = self.cfg.num_vertices as f64;
         let area = self.cfg.width as f64 * self.cfg.height as f64;
-        let mu_free = area*0.5; // Free space
+        let mu_free = area * 0.5; // Free space
         let zeta = PI; // Area of the unit circle
-        let a = 2.0 * (1.0 + 1.0/d);
-        let b = mu_free/zeta;
-        let gamma = a.powf(id)*b.powf(id);
-        return gamma * (n.log(d)/n).powf(id)
+        let a = 2.0 * (1.0 + 1.0 / d);
+        let b = mu_free / zeta;
+        let gamma = a.powf(id) * b.powf(id);
+        return gamma * (n.log(d) / n).powf(id);
     }
 
     pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
@@ -71,8 +75,7 @@ impl DPrm {
         let mut nearest = self.vertices[0].clone();
         for v in self.vertices.iter() {
             let distance = v.point.euclidean_distance(&point);
-            if distance < min_distance &&
-                !self.obstacles.contains(&v.point) {
+            if distance < min_distance && !self.obstacles.contains(&v.point) {
                 min_distance = distance;
                 nearest = v.clone();
             }
@@ -113,10 +116,20 @@ impl DPrm {
         // Indices of blocked edges in viable_edges
         let blocked = self.get_all_blocked();
         // Return viable_edges without blocked edges
-        self.edges = Arc::new(self.viable_edges.iter().enumerate().filter(|(i, _)| !blocked.contains(i)).map(|(_, e)| e.clone()).collect())
+        self.edges = Arc::new(
+            self.viable_edges
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !blocked.contains(i))
+                .map(|(_, e)| e.clone())
+                .collect(),
+        )
     }
 
-    pub async fn generate_viable_edges_and_vertices(&self, threads: usize) -> (Vec<Vertex>, Vec<Edge>) {
+    pub async fn generate_viable_edges_and_vertices(
+        &self,
+        threads: usize,
+    ) -> (Vec<Vertex>, Vec<Edge>) {
         // Create parallel executors
         let chunk_size = self.cfg.num_vertices / threads;
         let mut handles = Vec::new();
@@ -165,7 +178,11 @@ impl DPrm {
                 let length = p1.euclidean_distance(&points[j]);
                 if length < radius {
                     let line = Line::new(p1, points[j].clone());
-                    edges.push(Edge{line, length, points: (i, j)});
+                    edges.push(Edge {
+                        line,
+                        length,
+                        points: (i, j),
+                    });
                 }
             }
         }
@@ -173,12 +190,18 @@ impl DPrm {
     }
 
     /// Updates self to be an accurate representation of all current obstacles.
-    pub async fn find_all_blocked(&self, threads: usize) -> (HashMap<ObstacleId, Vec<EdgeIndex>>, Vec<Edge>){
+    pub async fn find_all_blocked(
+        &self,
+        threads: usize,
+    ) -> (HashMap<ObstacleId, Vec<EdgeIndex>>, Vec<Edge>) {
         let mut handles = Vec::new();
         for o in &self.obstacles.obstacles {
             let clone = self.clone();
             let obstacle = o.clone();
-            let handle = tokio::spawn(async move { clone.find_blocked_by_obstacle(obstacle, threads).await });
+            let handle =
+                tokio::spawn(
+                    async move { clone.find_blocked_by_obstacle(obstacle, threads).await },
+                );
 
             handles.push((handle, o.id()));
         }
@@ -212,7 +235,9 @@ impl DPrm {
 
     // Returns a sorted deduplicated Vec of blocked EdgeIndices
     pub async fn recompute_all_blocked(&self, threads: usize) -> Vec<EdgeIndex> {
-        let mut v: Vec<EdgeIndex> = self.blocked_per_obstacle.values()
+        let mut v: Vec<EdgeIndex> = self
+            .blocked_per_obstacle
+            .values()
             .flatten()
             .map(|i| *i)
             .collect();
@@ -229,7 +254,11 @@ impl DPrm {
             let start = i * chunk_size;
             let end = ((i + 1) * chunk_size).min(n);
             let clone = self.clone();
-            let handle = tokio::spawn(async move { clone.find_blocked_by_obstacle_worker(start, end, obstacle.clone()).await });
+            let handle = tokio::spawn(async move {
+                clone
+                    .find_blocked_by_obstacle_worker(start, end, obstacle.clone())
+                    .await
+            });
 
             handles.push(handle);
         }
@@ -248,7 +277,12 @@ impl DPrm {
         blocked_edges
     }
 
-    async fn find_blocked_by_obstacle_worker(&self, start: EdgeIndex, end: EdgeIndex, obstacle: Obstacle) -> Vec<EdgeIndex> {
+    async fn find_blocked_by_obstacle_worker(
+        &self,
+        start: EdgeIndex,
+        end: EdgeIndex,
+        obstacle: Obstacle,
+    ) -> Vec<EdgeIndex> {
         let mut blocked = Vec::new();
         for i in start..end {
             let edge = &self.viable_edges[i];
@@ -262,9 +296,7 @@ impl DPrm {
     async fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
         let mut unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
         let all_blocked = self.get_all_blocked();
-        unblocked.retain( |i| {
-            all_blocked.contains(i)
-        });
+        unblocked.retain(|i| all_blocked.contains(i));
         unblocked
     }
 
@@ -312,39 +344,33 @@ impl DPrm {
 
         // Draw edges
         chart
-            .draw_series(
-                self.edges.iter().map(|edge| {
-                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], CYAN)
-                }),
-            )
+            .draw_series(self.edges.iter().map(|edge| {
+                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], CYAN)
+            }))
             .unwrap()
             .label("Edge")
             .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], CYAN));
-            
+
         // Draw blocked edges
         chart
-            .draw_series(
-                self.get_all_blocked().iter().map(|edge_index| {
-                    let edge = &self.viable_edges[*edge_index];
-                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], YELLOW)
-                }),
-            )
+            .draw_series(self.get_all_blocked().iter().map(|edge_index| {
+                let edge = &self.viable_edges[*edge_index];
+                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], YELLOW)
+            }))
             .unwrap()
             .label("Edge")
             .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], YELLOW));
- 
-        // Draw path 
+
+        // Draw path
         if let Some((path, _)) = path {
             // Draw edges
             let mut pv = path[0].clone();
             chart
-                .draw_series(
-                    path.iter().map(|v| {
-                        let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], BLACK);
-                        pv = v.clone();
-                        e
-                    }),
-                )
+                .draw_series(path.iter().map(|v| {
+                    let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], BLACK);
+                    pv = v.clone();
+                    e
+                }))
                 .unwrap()
                 .label("Edge")
                 .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLACK));
