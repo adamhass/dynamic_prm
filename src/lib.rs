@@ -3,9 +3,12 @@ mod astar;
 mod dprm;
 mod prm;
 pub mod prelude {
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
     pub use crate::astar::*;
     pub use crate::dprm::*;
-    pub use crate::prm::*;
+
     use geo::{Contains, Intersects};
     use geo::{Line, Point, Rect};
     use plotters::prelude::*;
@@ -116,6 +119,37 @@ pub mod prelude {
 
         pub fn remove(&mut self, obstacle: &Obstacle) {
             self.obstacles.retain(|o| o != obstacle);
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct PrmConfig {
+        pub num_vertices: usize,
+        pub width: usize,
+        pub height: usize,
+        pub seed: Arc<Mutex<[u8; 32]>>,
+        pub use_viable_edges: bool,
+        pub use_blocked_per_obstacle: bool,
+        pub threads: usize,
+    }
+
+    impl PrmConfig {
+        pub fn new(
+            num_vertices: usize,
+            width: usize,
+            height: usize,
+            seed: [u8; 32],
+            threads: usize,
+        ) -> PrmConfig {
+            PrmConfig {
+                num_vertices,
+                width,
+                height,
+                seed: Arc::new(Mutex::new(seed)),
+                use_viable_edges: false,         // Default to false
+                use_blocked_per_obstacle: false, // Default to false
+                threads,
+            }
         }
     }
 }

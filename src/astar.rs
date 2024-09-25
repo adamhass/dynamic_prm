@@ -21,10 +21,15 @@ impl Astar {
         }
     }
 
+    /// Initializes the neighbours of the vertices, to speed up A*
     pub fn init_neighbours(&mut self) {
-        self.neighbours = (0..self.prm.vertices.len())
-            .map(|i| (self.basic_successors(&i)))
-            .collect();
+        for i in 0..self.prm.vertices.len() {
+            self.neighbours.push(Vec::new());
+        }
+        for e in self.prm.edges.values() {
+            self.neighbours[e.points.0].push((e.points.1, e.length.round() as Distance));
+            self.neighbours[e.points.1].push((e.points.0, e.length.round() as Distance));
+        }
     }
 
     pub fn run_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
@@ -57,7 +62,7 @@ impl Astar {
     pub fn basic_successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
         // Get the basic successors
         let mut successors = Vec::new();
-        for e in self.prm.edges.iter() {
+        for e in self.prm.edges.values() {
             if e.points.0 == *start {
                 successors.push((e.points.1, e.length.round() as Distance));
             } else if e.points.1 == *start {
@@ -95,5 +100,27 @@ impl Astar {
             return Some((ret, length));
         }
         None
+    }
+
+    pub fn remove_edges(&mut self, edges: Vec<EdgeIndex>) {
+        if self.optimized {
+            for e in edges {
+                let edge = self.prm.edges.get(&e).unwrap();
+                self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
+                self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
+            }
+        }
+    }
+
+    pub fn insert_edges(&mut self, edges: Vec<EdgeIndex>) {
+        if self.optimized {
+            for e in edges {
+                let edge = self.prm.edges.get(&e).unwrap();
+                self.neighbours[edge.points.0]
+                    .push((edge.points.1, edge.length.round() as Distance));
+                self.neighbours[edge.points.1]
+                    .push((edge.points.0, edge.length.round() as Distance));
+            }
+        }
     }
 }

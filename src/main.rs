@@ -24,7 +24,7 @@ async fn main() {
     let seed = Arc::new([0u8; 32]);
     let start_width = 100;
     let start_height = 100;
-    let start_num_vertices = 10000;
+    let start_num_vertices = 30000;
     let start_num_obstacles = 100;
     let iterations = 1;
     for i in 1..iterations + 1 {
@@ -42,31 +42,56 @@ async fn main() {
         println!("* HEIGHT: {}", height);
         println!("* THREADS: {}", threads);
         // Iteration set-up
-        let seed = [i as u8; 32];
-        let mut cfg = PrmConfig::new(num_vertices, width, height, seed);
+        let prm_seed = [i; 32];
+        let mut cfg = PrmConfig::new(num_vertices, width, height, prm_seed, threads);
         if i == 2 {
             cfg.use_viable_edges = true;
         }
-        let mut prm = Prm::new(cfg, num_obstacles);
-        prm.print();
-        // Run the experiment
-        let mut dprm = DPrm::new(prm);
-        // Start timer
+        let obstacle_seed = [i + 2_u8; 32];
+        let obstacles = ObstacleSet::new_random(
+            num_obstacles,
+            width,
+            height,
+            &mut ChaCha8Rng::from_seed(obstacle_seed),
+        );
+
+        // Create the PRM
         let start_time = Instant::now();
-        // Do parallel PRM
-        dprm.update_viable_edges_and_vertices(threads).await;
-        dprm.update_all_blocked(threads).await;
+        let mut dprm = DPrm::new(cfg, Arc::new(obstacles)).await;
         // End timer, convert to ms
-        let duration = start_time.elapsed().as_millis() as f64;
-        println!("Duration (ms): {}", duration);
         dprm.print();
-        let astar = Astar::new(dprm.clone());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Initialized dprm in {} ms", duration);
+
+        // Initialize A*
+        let start_time = Instant::now();
+        let mut astar = Astar::new(dprm.clone());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Initialized Astar naively in {} ms", duration);
+
+        // Find a path using A* naively
         let start = dprm.get_nearest(Point::new(0.0, height as f64));
         let end = dprm.get_nearest(Point::new(width as f64, 0.0));
+        let start_time = Instant::now();
+        let path = astar.run_astar(start.clone(), end.clone());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Found a path naively in {} ms", duration);
+
+        // Optimize for A*
+        let start_time = Instant::now();
+        astar.optimized = true;
+        astar.init_neighbours();
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Optimized Astar in {} ms", duration);
+
+        // Find a path using A* optimized
+        let start_time = Instant::now();
         let path = astar.run_astar(start, end);
-        println!("{}", path.is_some());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Found a path optimized in {} ms", duration);
+
         dprm.plot(format!("{}_dprm", i), path);
-        println!("Waiting for stdin");
+
         /*
 
         // Start timer
@@ -112,25 +137,25 @@ async fn main() {
     }
 }
 
-async fn add_remove(mut prm: Prm, i: usize, threads: usize) {
-    let new_obstacle: Obstacle = Obstacle::new((40.0, 40.0), (60.0, 60.0));
-    plot(format!("{}_new", i), &prm, None);
-    // Add new obstacle
-    let start_time = Instant::now();
-    prm.add_obstacle(new_obstacle, threads).await;
-    let duration = start_time.elapsed().as_millis() as f64;
-    prm.print();
-    plot(format!("{}_added_obstacle", i), &prm, None);
+// async fn add_remove(mut prm: DPrm, i: usize, threads: usize) {
+//     let new_obstacle: Obstacle = Obstacle::new((40.0, 40.0), (60.0, 60.0));
+//     plot(format!("{}_new", i), &prm, None);
+//     // Add new obstacle
+//     let start_time = Instant::now();
+//     prm.add_obstacle(new_obstacle, threads).await;
+//     let duration = start_time.elapsed().as_millis() as f64;
+//     prm.print();
+//     plot(format!("{}_added_obstacle", i), &prm, None);
 
-    // Remove obstacle
-    // let remove_obstacle = prm.obstacles.obstacles.get(0).unwrap().clone();
-    let start_time = Instant::now();
-    prm.remove_obstacle(new_obstacle, threads).await;
-    let duration = start_time.elapsed().as_millis() as f64;
-    prm.print();
-    println!("Duration (ms): {}", duration);
-    plot(format!("{}_removed_obstacle", i), &prm, None);
-}
+//     // Remove obstacle
+//     // let remove_obstacle = prm.obstacles.obstacles.get(0).unwrap().clone();
+//     let start_time = Instant::now();
+//     prm.remove_obstacle(new_obstacle, threads).await;
+//     let duration = start_time.elapsed().as_millis() as f64;
+//     prm.print();
+//     println!("Duration (ms): {}", duration);
+//     plot(format!("{}_removed_obstacle", i), &prm, None);
+// }
 /*
     HELPER FUNCTIONS
 */
@@ -141,77 +166,77 @@ fn parse_env_var(name: &str) -> usize {
         .unwrap_or_else(|_| panic!("Failed to parse environment variable {}", name))
 }
 
-fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) {
-    let filename = format!("output/{}.png", name);
-    // Create a drawing area
-    let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
-    root.fill(&WHITE).unwrap();
+// fn plot(name: String, prm: &DPrm, path: Option<Vec<Vertex>>) {
+//     let filename = format!("output/{}.png", name);
+//     // Create a drawing area
+//     let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
+//     root.fill(&WHITE).unwrap();
 
-    // Define the chart
-    let mut chart = ChartBuilder::on(&root)
-        .caption("Edges and Obstacles", ("sans-serif", 50))
-        .x_label_area_size(30)
-        .y_label_area_size(30)
-        .build_cartesian_2d(0.0..(prm.cfg.width as f64), 0.0..(prm.cfg.height as f64))
-        .unwrap();
+//     // Define the chart
+//     let mut chart = ChartBuilder::on(&root)
+//         .caption("Edges and Obstacles", ("sans-serif", 50))
+//         .x_label_area_size(30)
+//         .y_label_area_size(30)
+//         .build_cartesian_2d(0.0..(prm.cfg.width as f64), 0.0..(prm.cfg.height as f64))
+//         .unwrap();
 
-    chart.configure_mesh().draw().unwrap();
+//     chart.configure_mesh().draw().unwrap();
 
-    // Draw obstacles
-    chart
-        .draw_series(prm.obstacles.obstacles.iter().map(|o| o.rectangle()))
-        .unwrap();
-    root.present().unwrap();
+//     // Draw obstacles
+//     chart
+//         .draw_series(prm.obstacles.obstacles.iter().map(|o| o.rectangle()))
+//         .unwrap();
+//     root.present().unwrap();
 
-    // Draw vertices
-    chart
-        .draw_series(
-            (*prm.vertices)
-                .clone()
-                .into_iter()
-                .map(|v| Circle::new(v.point.0.x_y(), 2, BLACK)),
-        )
-        .unwrap();
+//     // Draw vertices
+//     chart
+//         .draw_series(
+//             (*prm.vertices)
+//                 .clone()
+//                 .into_iter()
+//                 .map(|v| Circle::new(v.point.0.x_y(), 2, BLACK)),
+//         )
+//         .unwrap();
 
-    // Draw edges
-    chart
-        .draw_series(
-            prm.edges.iter().map(|edge| {
-                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], BLUE)
-            }),
-        )
-        .unwrap()
-        .label("Edge")
-        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
+//     // Draw edges
+//     chart
+//         .draw_series(
+//             prm.edges.iter().map(|edge| {
+//                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], BLUE)
+//             }),
+//         )
+//         .unwrap()
+//         .label("Edge")
+//         .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
 
-    // Draw viable edges
-    chart
-        .draw_series(
-            prm.viable_edges.iter().map(|edge| {
-                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], RED)
-            }),
-        )
-        .unwrap()
-        .label("Edge")
-        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
+//     // Draw viable edges
+//     chart
+//         .draw_series(
+//             prm.viable_edges.iter().map(|edge| {
+//                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], RED)
+//             }),
+//         )
+//         .unwrap()
+//         .label("Edge")
+//         .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
 
-    // Draw path
-    if let Some(path) = path {
-        let style = GREEN;
-        style.stroke_width(25);
-        // Draw edges
-        let mut pv = path[0].clone();
-        chart
-            .draw_series(path.iter().map(|v| {
-                let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style);
-                pv = v.clone();
-                e
-            }))
-            .unwrap()
-            .label("Edge")
-            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], GREEN));
-    }
-}
+//     // Draw path
+//     if let Some(path) = path {
+//         let style = GREEN;
+//         style.stroke_width(25);
+//         // Draw edges
+//         let mut pv = path[0].clone();
+//         chart
+//             .draw_series(path.iter().map(|v| {
+//                 let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style);
+//                 pv = v.clone();
+//                 e
+//             }))
+//             .unwrap()
+//             .label("Edge")
+//             .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], GREEN));
+//     }
+// }
 
 /*
 export ITERATIONS=5

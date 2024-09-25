@@ -16,34 +16,33 @@ const DIMENSIONS: usize = 2;
 // Prm stores all edges in viable edges
 #[derive(Clone)]
 pub struct DPrm {
-    pub vertices: Arc<Vec<Vertex>>,
-    pub edges: Arc<Vec<Edge>>,
-    pub viable_edges: Arc<Vec<Edge>>,
-    pub obstacles: Arc<ObstacleSet>,
-    pub blocked_per_obstacle: HashMap<ObstacleId, Vec<usize>>,
-    pub cfg: PrmConfig,
+    pub(crate) vertices: Arc<Vec<Vertex>>,
+    pub(crate) edges: HashMap<EdgeIndex, Edge>,
+    viable_edges: Arc<Vec<Edge>>,
+    obstacles: Arc<ObstacleSet>,
+    blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
+    blockings_per_edge: HashMap<EdgeIndex, usize>,
+    cfg: PrmConfig,
 }
 
 impl DPrm {
-    pub fn new(prm: Prm) -> DPrm {
-        DPrm {
-            vertices: prm.vertices,
-            edges: prm.edges,
-            viable_edges: prm.viable_edges,
-            obstacles: prm.obstacles,
+    /// Create a new DPrm with the given configuration and an initial ObstacleSet.
+    /// Initializes viable edges and vertices.
+    /// Finds all blocked edges per obstacle.
+    pub async fn new(cfg: PrmConfig, obstacles: Arc<ObstacleSet>) -> DPrm {
+        let mut rng = ChaCha8Rng::from_seed(*cfg.seed.lock().unwrap());
+        let mut dprm = DPrm {
+            vertices: Arc::new(Vec::new()),
+            edges: HashMap::new(),
+            viable_edges: Arc::new(Vec::new()),
+            obstacles,
             blocked_per_obstacle: HashMap::new(),
-            cfg: prm.cfg,
-        }
-    }
-
-    pub fn get_prm(&self) -> Prm {
-        Prm {
-            vertices: self.vertices.clone(),
-            edges: self.edges.clone(),
-            viable_edges: self.viable_edges.clone(),
-            obstacles: self.obstacles.clone(),
-            cfg: self.cfg.clone(),
-        }
+            blockings_per_edge: HashMap::new(),
+            cfg,
+        };
+        dprm.initialize_viable_edges_and_vertices().await;
+        dprm.initialize_all_blocked().await;
+        dprm
     }
 
     pub fn print(&self) {
@@ -57,19 +56,7 @@ impl DPrm {
         );
     }
 
-    fn max_radius(&self) -> f64 {
-        let d = DIMENSIONS as f64;
-        let id = 1.0 / d;
-        let n = self.cfg.num_vertices as f64;
-        let area = self.cfg.width as f64 * self.cfg.height as f64;
-        let mu_free = area * 0.5; // Free space
-        let zeta = PI; // Area of the unit circle
-        let a = 2.0 * (1.0 + 1.0 / d);
-        let b = mu_free / zeta;
-        let gamma = a.powf(id) * b.powf(id);
-        gamma * (n.log(d) / n).powf(id)
-    }
-
+    /// Returns the nearest vertex to the given point.
     pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
         let mut min_distance = f64::MAX;
         let mut nearest = self.vertices[0].clone();
@@ -83,53 +70,15 @@ impl DPrm {
         nearest
     }
 
-    pub fn increment_seed(&self, increment: u8) {
-        let mut seed = self.cfg.seed.lock().unwrap(); // Borrow a mutable reference
-        for i in 0..seed.len() {
-            seed[i] = seed[i].wrapping_add(increment);
-        }
-    }
-
-    pub fn get_rng(&self) -> ChaCha8Rng {
-        ChaCha8Rng::from_seed(*(self.cfg.seed.lock().unwrap()))
-    }
-
-    fn generate_vertices(&self, n: usize, width: usize, height: usize) -> Vec<Point<f64>> {
-        let mut rng = self.get_rng();
-        let mut vertices = Vec::new();
-        while vertices.len() < n {
-            vertices.push(Point::new(
-                rng.gen_range(0.0..width as f64),
-                rng.gen_range(0.0..height as f64),
-            ));
-        }
-        vertices
-    }
-
-    pub async fn update_viable_edges_and_vertices(&mut self, threads: usize) {
-        let (vertices, viable_edges) = self.generate_viable_edges_and_vertices(threads).await;
+    /// Generates all the vertices and finds viable edges between them.
+    async fn initialize_viable_edges_and_vertices(&mut self) {
+        let (vertices, viable_edges) = self.generate_viable_edges_and_vertices().await;
         self.vertices = Arc::new(vertices);
         self.viable_edges = Arc::new(viable_edges);
     }
 
-    pub fn update_edges(&mut self) {
-        // Indices of blocked edges in viable_edges
-        let blocked = self.get_all_blocked();
-        // Return viable_edges without blocked edges
-        self.edges = Arc::new(
-            self.viable_edges
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| !blocked.contains(i))
-                .map(|(_, e)| e.clone())
-                .collect(),
-        )
-    }
-
-    pub async fn generate_viable_edges_and_vertices(
-        &self,
-        threads: usize,
-    ) -> (Vec<Vertex>, Vec<Edge>) {
+    async fn generate_viable_edges_and_vertices(&self) -> (Vec<Vertex>, Vec<Edge>) {
+        let threads = self.cfg.threads;
         // Create parallel executors
         let chunk_size = self.cfg.num_vertices / threads;
         let mut handles = Vec::new();
@@ -159,10 +108,24 @@ impl DPrm {
                 }
             }
         }
+        println!("Found {} viable edges", all_viable_edges.len());
         (all_vertices, all_viable_edges)
     }
 
-    pub async fn viable_edges_worker(&self, start: usize, end: usize) -> (Vec<Vertex>, Vec<Edge>) {
+    // Generates vertices randomly within the given width and height.
+    fn generate_vertices(&self, n: usize, width: usize, height: usize) -> Vec<Point<f64>> {
+        let mut rng = self.get_rng();
+        let mut vertices = Vec::new();
+        while vertices.len() < n {
+            vertices.push(Point::new(
+                rng.gen_range(0.0..width as f64),
+                rng.gen_range(0.0..height as f64),
+            ));
+        }
+        vertices
+    }
+
+    async fn viable_edges_worker(&self, start: usize, end: usize) -> (Vec<Vertex>, Vec<Edge>) {
         let mut points = self.generate_vertices(end, self.cfg.width, self.cfg.height);
         let mut vertices = Vec::new();
         let mut edges = Vec::new();
@@ -190,27 +153,22 @@ impl DPrm {
     }
 
     /// Updates self to be an accurate representation of all current obstacles.
-    pub async fn find_all_blocked(
-        &self,
-        threads: usize,
-    ) -> (HashMap<ObstacleId, Vec<EdgeIndex>>, Vec<Edge>) {
+    async fn initialize_all_blocked(&mut self) {
+        println!("Finding blocked per obstacle...");
         let mut handles = Vec::new();
         for o in &self.obstacles.obstacles {
             let clone = self.clone();
             let obstacle = *o;
             let handle =
-                tokio::spawn(
-                    async move { clone.find_blocked_by_obstacle(obstacle, threads).await },
-                );
-
+                tokio::spawn(async move { clone.find_blocked_by_obstacle(obstacle).await });
             handles.push((handle, o.id()));
         }
-        let mut all_blocked: Vec<EdgeIndex> = Vec::new();
+        //        let mut all_blocked: Vec<EdgeIndex> = Vec::new();
         let mut blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>> = HashMap::new();
         for (handle, id) in handles {
             match handle.await {
                 Ok(e_index) => {
-                    all_blocked.extend(&e_index);
+                    //                    all_blocked.extend(&e_index);
                     blocked_per_obstacle.insert(id, e_index);
                 }
                 Err(e) => {
@@ -218,34 +176,41 @@ impl DPrm {
                 }
             }
         }
-        let mut edges: Vec<Edge> = Vec::new();
-        all_blocked.sort();
-        all_blocked.dedup();
-        for i in all_blocked {
-            edges.push(self.viable_edges[i].clone());
-        }
-        (blocked_per_obstacle, edges)
-    }
-
-    pub async fn update_all_blocked(&mut self, threads: usize) {
-        let (blocked_per_obstacle, edges) = self.find_all_blocked(threads).await;
+        println!("Found all blocked edges");
         self.blocked_per_obstacle = blocked_per_obstacle;
+        self.update_blockings();
         self.update_edges();
     }
 
-    // Returns a sorted deduplicated Vec of blocked EdgeIndices
-    pub async fn recompute_all_blocked(&self, threads: usize) -> Vec<EdgeIndex> {
-        let mut v: Vec<EdgeIndex> = self
-            .blocked_per_obstacle
-            .values()
-            .flatten().copied()
-            .collect();
-        v.sort();
-        v.dedup();
-        v
+    fn update_blockings(&mut self) {
+        for blocked in self.blocked_per_obstacle.values() {
+            for edge in blocked {
+                let count = self.blockings_per_edge.entry(*edge).or_insert(0);
+                *count += 1;
+            }
+        }
     }
 
-    pub async fn find_blocked_by_obstacle(&self, obstacle: Obstacle, threads: usize) -> Vec<usize> {
+    fn update_edges(&mut self) {
+        for (i, edge) in self.viable_edges.iter().enumerate() {
+            if self.blockings_per_edge.get(&i).unwrap_or(&0) == &0 {
+                self.edges.insert(i, edge.clone());
+            }
+        }
+    }
+
+    fn get_all_blocked(&self) -> Vec<EdgeIndex> {
+        let mut blocked = Vec::new();
+        for edges in self.blocked_per_obstacle.values() {
+            blocked.extend(edges);
+        }
+        blocked.sort();
+        blocked
+    }
+
+    /// Makes no changes to &self, only returns the edge id's blocked by the given obstacle
+    pub async fn find_blocked_by_obstacle(&self, obstacle: Obstacle) -> Vec<EdgeIndex> {
+        let threads = self.cfg.threads;
         let n = self.viable_edges.len();
         let chunk_size = (n + threads - 1) / threads;
         let mut handles = Vec::new();
@@ -253,11 +218,10 @@ impl DPrm {
             let start = i * chunk_size;
             let end = ((i + 1) * chunk_size).min(n);
             let clone = self.clone();
-            let handle = tokio::spawn(async move {
-                clone
-                    .find_blocked_by_obstacle_worker(start, end, obstacle)
-                    .await
-            });
+            let handle =
+                tokio::spawn(
+                    async move { clone.find_blocked_by_obstacle_worker(start, end, obstacle) },
+                );
 
             handles.push(handle);
         }
@@ -276,7 +240,7 @@ impl DPrm {
         blocked_edges
     }
 
-    async fn find_blocked_by_obstacle_worker(
+    fn find_blocked_by_obstacle_worker(
         &self,
         start: EdgeIndex,
         end: EdgeIndex,
@@ -292,23 +256,44 @@ impl DPrm {
         blocked
     }
 
-    async fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
-        let mut unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
-        let all_blocked = self.get_all_blocked();
-        unblocked.retain(|i| all_blocked.contains(i));
-        unblocked
-    }
-
-    fn get_all_blocked(&self) -> Vec<EdgeIndex> {
-        let mut blocked = Vec::new();
-        for edges in self.blocked_per_obstacle.values() {
-            blocked.extend(edges);
+    /// Inserts the given obstacle and updates the graph, returning the newly blocked edges.
+    pub async fn insert_blocked_by_obstacle(
+        &mut self,
+        oid: ObstacleId,
+        blockings: Vec<EdgeIndex>,
+    ) -> Vec<EdgeIndex> {
+        let mut blocked_edges = Vec::new();
+        for edge_index in &blockings {
+            let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
+            *count += 1;
+            if *count == 1 {
+                let _ = self.edges.remove(edge_index);
+                blocked_edges.push(*edge_index);
+            }
         }
-        blocked.sort();
-        blocked.dedup();
-        blocked
+        self.blocked_per_obstacle.insert(oid, blockings);
+        blocked_edges
     }
 
+    /// Removes obstacle and updates the graph, and returns the newly unblocked edges.
+    pub async fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
+        let mut unblocked_edges = Vec::new();
+        let mut unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
+        for edge_index in &unblocked {
+            let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
+            *count -= 1;
+            if *count == 0 {
+                let edge = self.viable_edges[*edge_index].clone();
+                self.edges.insert(*edge_index, edge);
+                unblocked_edges.push(*edge_index);
+            }
+        }
+        unblocked_edges
+    }
+
+    /// Plots the current state of the graph, including vertices, edges, and obstacles.
+    /// If a path is provided, it will also be plotted.
+    /// Saves the plot to a file with the given name.
     pub fn plot(&self, file_name: String, path: Option<AstarPath>) {
         let filename = format!("output/{}.png", file_name);
         // Create a drawing area
@@ -343,7 +328,7 @@ impl DPrm {
 
         // Draw edges
         chart
-            .draw_series(self.edges.iter().map(|edge| {
+            .draw_series(self.edges.values().map(|edge| {
                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], CYAN)
             }))
             .unwrap()
@@ -374,5 +359,26 @@ impl DPrm {
                 .label("Edge")
                 .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLACK));
         }
+    }
+
+    /*
+     *** HELPERS: ***
+     */
+
+    fn max_radius(&self) -> f64 {
+        let d = DIMENSIONS as f64;
+        let id = 1.0 / d;
+        let n = self.cfg.num_vertices as f64;
+        let area = self.cfg.width as f64 * self.cfg.height as f64;
+        let mu_free = area * 0.5; // Free space
+        let zeta = PI; // Area of the unit circle
+        let a = 2.0 * (1.0 + 1.0 / d);
+        let b = mu_free / zeta;
+        let gamma = a.powf(id) * b.powf(id);
+        gamma * (n.log(d) / n).powf(id)
+    }
+
+    fn get_rng(&self) -> ChaCha8Rng {
+        ChaCha8Rng::from_seed(*(self.cfg.seed.lock().unwrap()))
     }
 }

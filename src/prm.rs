@@ -21,29 +21,6 @@ pub fn gamma_prm(_: usize, _: usize, _: usize) -> f64 {
     // (log_n / n_f64).powf(1.0 / d_f64)*GAMMA
 }
 
-#[derive(Clone)]
-pub struct PrmConfig {
-    pub num_vertices: usize,
-    pub width: usize,
-    pub height: usize,
-    pub seed: Arc<Mutex<[u8; 32]>>,
-    pub use_viable_edges: bool,
-    pub use_blocked_per_obstacle: bool,
-}
-
-impl PrmConfig {
-    pub fn new(num_vertices: usize, width: usize, height: usize, seed: [u8; 32]) -> PrmConfig {
-        PrmConfig {
-            num_vertices,
-            width,
-            height,
-            seed: Arc::new(Mutex::new(seed)),
-            use_viable_edges: false,         // Default to false
-            use_blocked_per_obstacle: false, // Default to false
-        }
-    }
-}
-
 // Prm Shuffles edges from 'viable' to 'edges' back and forth
 #[derive(Clone)]
 pub struct Prm {
@@ -57,8 +34,12 @@ pub struct Prm {
 impl Prm {
     pub fn new(cfg: PrmConfig, n_obstacles: usize) -> Prm {
         let mut rng = ChaCha8Rng::from_seed(*cfg.seed.lock().unwrap());
-        let obstacles =
-            Arc::new(ObstacleSet::new_random(n_obstacles, cfg.width, cfg.height, &mut rng));
+        let obstacles = Arc::new(ObstacleSet::new_random(
+            n_obstacles,
+            cfg.width,
+            cfg.height,
+            &mut rng,
+        ));
         {
             Prm {
                 vertices: Arc::new(Vec::new()),
@@ -247,11 +228,10 @@ impl Prm {
         let mut handles = Vec::new();
         for i in 0..num_threads {
             let clone = self.clone();
-            let handle = tokio::spawn(async move {
-                clone
-                    .create_edges_worker(i, num_threads, obstacle)
-                    .await
-            });
+            let handle =
+                tokio::spawn(
+                    async move { clone.create_edges_worker(i, num_threads, obstacle).await },
+                );
             handles.push(handle);
         }
 
