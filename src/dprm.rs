@@ -67,7 +67,7 @@ impl DPrm {
         let a = 2.0 * (1.0 + 1.0 / d);
         let b = mu_free / zeta;
         let gamma = a.powf(id) * b.powf(id);
-        return gamma * (n.log(d) / n).powf(id);
+        gamma * (n.log(d) / n).powf(id)
     }
 
     pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
@@ -83,7 +83,7 @@ impl DPrm {
         nearest
     }
 
-    pub fn increment_seed(&self, increment: u8) -> () {
+    pub fn increment_seed(&self, increment: u8) {
         let mut seed = self.cfg.seed.lock().unwrap(); // Borrow a mutable reference
         for i in 0..seed.len() {
             seed[i] = seed[i].wrapping_add(increment);
@@ -91,7 +91,7 @@ impl DPrm {
     }
 
     pub fn get_rng(&self) -> ChaCha8Rng {
-        ChaCha8Rng::from_seed((self.cfg.seed.lock().unwrap()).clone())
+        ChaCha8Rng::from_seed(*(self.cfg.seed.lock().unwrap()))
     }
 
     fn generate_vertices(&self, n: usize, width: usize, height: usize) -> Vec<Point<f64>> {
@@ -174,10 +174,10 @@ impl DPrm {
                 point: p1,
                 index: i,
             });
-            for j in 0..points.len() {
-                let length = p1.euclidean_distance(&points[j]);
+            for (j, point) in points.iter().enumerate() {
+                let length = p1.euclidean_distance(point);
                 if length < radius {
-                    let line = Line::new(p1, points[j].clone());
+                    let line = Line::new(p1, *point);
                     edges.push(Edge {
                         line,
                         length,
@@ -197,7 +197,7 @@ impl DPrm {
         let mut handles = Vec::new();
         for o in &self.obstacles.obstacles {
             let clone = self.clone();
-            let obstacle = o.clone();
+            let obstacle = *o;
             let handle =
                 tokio::spawn(
                     async move { clone.find_blocked_by_obstacle(obstacle, threads).await },
@@ -238,8 +238,7 @@ impl DPrm {
         let mut v: Vec<EdgeIndex> = self
             .blocked_per_obstacle
             .values()
-            .flatten()
-            .map(|i| *i)
+            .flatten().copied()
             .collect();
         v.sort();
         v.dedup();
@@ -256,7 +255,7 @@ impl DPrm {
             let clone = self.clone();
             let handle = tokio::spawn(async move {
                 clone
-                    .find_blocked_by_obstacle_worker(start, end, obstacle.clone())
+                    .find_blocked_by_obstacle_worker(start, end, obstacle)
                     .await
             });
 
@@ -310,7 +309,7 @@ impl DPrm {
         blocked
     }
 
-    pub fn plot(&self, file_name: String, path: Option<AstarPath>) -> () {
+    pub fn plot(&self, file_name: String, path: Option<AstarPath>) {
         let filename = format!("output/{}.png", file_name);
         // Create a drawing area
         let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();

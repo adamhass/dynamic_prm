@@ -58,12 +58,12 @@ impl Prm {
     pub fn new(cfg: PrmConfig, n_obstacles: usize) -> Prm {
         let mut rng = ChaCha8Rng::from_seed(*cfg.seed.lock().unwrap());
         let obstacles =
-            Arc::new(ObstacleSet::new_random(n_obstacles, cfg.width, cfg.height, &mut rng).into());
+            Arc::new(ObstacleSet::new_random(n_obstacles, cfg.width, cfg.height, &mut rng));
         {
             Prm {
-                vertices: Arc::new(Vec::new().into()),
-                edges: Arc::new(Vec::new().into()),
-                viable_edges: Arc::new(Vec::new().into()),
+                vertices: Arc::new(Vec::new()),
+                edges: Arc::new(Vec::new()),
+                viable_edges: Arc::new(Vec::new()),
                 obstacles,
                 cfg,
             }
@@ -93,7 +93,7 @@ impl Prm {
         );
     }
 
-    pub fn increment_seed(&self) -> () {
+    pub fn increment_seed(&self) {
         let mut seed = self.cfg.seed.lock().unwrap(); // Borrow a mutable reference
         for i in 0..seed.len() {
             seed[i] = seed[i].wrapping_add(1);
@@ -101,7 +101,7 @@ impl Prm {
     }
 
     pub fn get_rng(&self) -> ChaCha8Rng {
-        ChaCha8Rng::from_seed((self.cfg.seed.lock().unwrap()).clone())
+        ChaCha8Rng::from_seed(*(self.cfg.seed.lock().unwrap()))
     }
 
     fn generate_vertices(&self, n: usize, width: usize, height: usize) -> Vec<Point<f64>> {
@@ -116,7 +116,7 @@ impl Prm {
         vertices
     }
 
-    pub async fn compute(&mut self, num_threads: usize) -> () {
+    pub async fn compute(&mut self, num_threads: usize) {
         let (v, e, viable_edges) = self.run_prm(num_threads).await;
         self.update_vertices_and_edges(v, e, viable_edges);
     }
@@ -126,10 +126,10 @@ impl Prm {
         vertices: Vec<Vertex>,
         edges: Vec<Edge>,
         viable_edges: Vec<Edge>,
-    ) -> () {
-        self.vertices = Arc::new(vertices.into());
-        self.edges = Arc::new(edges.into());
-        self.viable_edges = Arc::new(viable_edges.into());
+    ) {
+        self.vertices = Arc::new(vertices);
+        self.edges = Arc::new(edges);
+        self.viable_edges = Arc::new(viable_edges);
     }
 
     /// Returns the set of vertices and edges to be removed
@@ -165,7 +165,7 @@ impl Prm {
         remove_edges
     }
 
-    pub async fn add_obstacle(&mut self, obstacle: Obstacle, num_threads: usize) -> () {
+    pub async fn add_obstacle(&mut self, obstacle: Obstacle, num_threads: usize) {
         let blocked_edges = self.remove_edges(obstacle, num_threads).await;
         // println!("Removing {} edges", remove_edges.len());
         let mut edges = (*self.edges).clone();
@@ -209,10 +209,8 @@ impl Prm {
 
         for i in start..end {
             let e = self.viable_edges[i].clone();
-            if obstacle.intersects(&e.line) {
-                if !self.obstacles.intersects(&e.line) {
-                    new_edges.push(i)
-                }
+            if obstacle.intersects(&e.line) && !self.obstacles.intersects(&e.line) {
+                new_edges.push(i)
             }
         }
         // println!("Worker found {} new edges", new_edges.len());
@@ -220,7 +218,7 @@ impl Prm {
     }
 
     /// Removes an obstacle from the PRM and computes the new set of obstacles
-    pub async fn remove_obstacle(&mut self, obstacle: Obstacle, num_threads: usize) -> () {
+    pub async fn remove_obstacle(&mut self, obstacle: Obstacle, num_threads: usize) {
         let mut obstacles = (*self.obstacles).clone();
         obstacles.remove(&obstacle);
         self.obstacles = Arc::new(obstacles);
@@ -251,7 +249,7 @@ impl Prm {
             let clone = self.clone();
             let handle = tokio::spawn(async move {
                 clone
-                    .create_edges_worker(i, num_threads, obstacle.clone())
+                    .create_edges_worker(i, num_threads, obstacle)
                     .await
             });
             handles.push(handle);
@@ -293,7 +291,7 @@ impl Prm {
                 }
                 let distance = p1.euclidean_distance(p2);
                 if distance < gamma && p1 != *p2 {
-                    let line = Line::new(p1, p2.clone());
+                    let line = Line::new(p1, *p2);
                     if !self.obstacles.intersects(&line) {
                         edges.push(Edge {
                             line,

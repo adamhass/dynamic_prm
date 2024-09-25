@@ -136,9 +136,9 @@ async fn add_remove(mut prm: Prm, i: usize, threads: usize) {
 */
 fn parse_env_var(name: &str) -> usize {
     env::var(name)
-        .expect(&format!("Environment variable {} not set", name))
+        .unwrap_or_else(|_| panic!("Environment variable {} not set", name))
         .parse()
-        .expect(&format!("Failed to parse environment variable {}", name))
+        .unwrap_or_else(|_| panic!("Failed to parse environment variable {}", name))
 }
 
 fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) {
