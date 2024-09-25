@@ -90,7 +90,19 @@ async fn main() {
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Found a path optimized in {} ms", duration);
 
-        dprm.plot(format!("{}_dprm", i), path);
+        // Write the PRM to disk
+        let serialization_path = format!("output/{}_dprm.json", i);
+        let start_time = Instant::now();
+        astar.prm.to_file(serialization_path.as_str());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Wrote dprm to disk in {} ms", duration);
+
+        // Read the PRM from disk
+        let start_time = Instant::now();
+        let dprm2 = DPrm::from_file(serialization_path.as_str());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Read dprm from disk in {} ms", duration);
+        dprm2.plot(format!("{}_dprm", i), path);
 
         /*
 

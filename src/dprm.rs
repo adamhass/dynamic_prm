@@ -6,11 +6,10 @@ use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
 use std::{
-    collections::HashMap,
-    f64::consts::PI,
-    sync::{Arc, Mutex, RwLock},
+    collections::HashMap, f64::consts::PI, fs::File, sync::{Arc, Mutex, RwLock}, io::{BufWriter, BufReader}
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{from_reader, to_writer_pretty};
 
 const DIMENSIONS: usize = 2;
 
@@ -42,6 +41,31 @@ impl DPrm {
         };
         dprm.initialize_viable_edges_and_vertices().await;
         dprm.initialize_all_blocked().await;
+        dprm
+    }
+
+    // Writes the DPrm to a JSON file at the given path.
+    pub fn to_file(&self, file_path: &str) -> serde_json::Result<()> {
+        // Create or truncate the file at the specified path
+        let file = File::create(file_path).unwrap();
+        let writer = BufWriter::new(file);
+
+        // Serialize `dprm` as pretty JSON into the file
+        to_writer_pretty(writer, self)?;
+
+        println!("DPrm successfully serialized to {}", file_path);
+        Ok(())
+    }
+
+    pub fn from_file(file_path: &str) -> DPrm {
+        // Open the file in read-only mode
+        let file = File::open(file_path).unwrap();
+        let reader = BufReader::new(file);
+
+        // Deserialize the JSON data into a `DPrm` instance
+        let dprm = from_reader(reader).unwrap();
+
+        println!("DPrm successfully deserialized from {}", file_path);
         dprm
     }
 
@@ -360,10 +384,6 @@ impl DPrm {
                 .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLACK));
         }
     }
-
-    /*
-     *** HELPERS: ***
-     */
 
     fn max_radius(&self) -> f64 {
         let d = DIMENSIONS as f64;
