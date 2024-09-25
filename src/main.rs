@@ -117,7 +117,7 @@ async fn add_remove(mut prm: Prm, i: usize, threads: usize) {
     plot(format!("{}_new", i), &prm, None);
     // Add new obstacle
     let start_time = Instant::now();
-    prm.add_obstacle(new_obstacle.clone(), threads).await;
+    prm.add_obstacle(new_obstacle, threads).await;
     let duration = start_time.elapsed().as_millis() as f64;
     prm.print();
     plot(format!("{}_added_obstacle", i), &prm, None);
@@ -141,7 +141,7 @@ fn parse_env_var(name: &str) -> usize {
         .expect(&format!("Failed to parse environment variable {}", name))
 }
 
-fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
+fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) {
     let filename = format!("output/{}.png", name);
     // Create a drawing area
     let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
@@ -169,7 +169,7 @@ fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
             (*prm.vertices)
                 .clone()
                 .into_iter()
-                .map(|v| Circle::new(v.point.0.x_y(), 2, &BLACK)),
+                .map(|v| Circle::new(v.point.0.x_y(), 2, BLACK)),
         )
         .unwrap();
 
@@ -177,23 +177,23 @@ fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
     chart
         .draw_series(
             prm.edges.iter().map(|edge| {
-                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &BLUE)
+                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], BLUE)
             }),
         )
         .unwrap()
         .label("Edge")
-        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
 
     // Draw viable edges
     chart
         .draw_series(
             prm.viable_edges.iter().map(|edge| {
-                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &RED)
+                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], RED)
             }),
         )
         .unwrap()
         .label("Edge")
-        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLUE));
 
     // Draw path 
     if let Some(path) = path {
@@ -204,14 +204,14 @@ fn plot(name: String, prm: &Prm, path: Option<Vec<Vertex>>) -> () {
         chart
             .draw_series(
                 path.iter().map(|v| {
-                    let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style.clone());
+                    let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], style);
                     pv = v.clone();
                     e
                 }),
             )
             .unwrap()
             .label("Edge")
-            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &GREEN));
+            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], GREEN));
     }
 }
 

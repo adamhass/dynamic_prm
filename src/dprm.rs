@@ -270,7 +270,7 @@ impl DPrm {
 
     fn get_all_blocked(&self) -> Vec<EdgeIndex> {
         let mut blocked = Vec::new();
-        for (_, edges) in &self.blocked_per_obstacle {
+        for edges in self.blocked_per_obstacle.values() {
             blocked.extend(edges);
         }
         blocked.sort();
@@ -306,7 +306,7 @@ impl DPrm {
                 (*self.vertices)
                     .clone()
                     .into_iter()
-                    .map(|v| Circle::new(v.point.0.x_y(), 3, &BLACK)),
+                    .map(|v| Circle::new(v.point.0.x_y(), 3, BLACK)),
             )
             .unwrap();
 
@@ -314,24 +314,24 @@ impl DPrm {
         chart
             .draw_series(
                 self.edges.iter().map(|edge| {
-                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &CYAN)
+                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], CYAN)
                 }),
             )
             .unwrap()
             .label("Edge")
-            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &CYAN));
+            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], CYAN));
             
         // Draw blocked edges
         chart
             .draw_series(
                 self.get_all_blocked().iter().map(|edge_index| {
                     let edge = &self.viable_edges[*edge_index];
-                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], &YELLOW)
+                    PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], YELLOW)
                 }),
             )
             .unwrap()
             .label("Edge")
-            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &YELLOW));
+            .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], YELLOW));
  
         // Draw path 
         if let Some((path, _)) = path {
@@ -340,14 +340,14 @@ impl DPrm {
             chart
                 .draw_series(
                     path.iter().map(|v| {
-                        let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], &BLACK);
+                        let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], BLACK);
                         pv = v.clone();
                         e
                     }),
                 )
                 .unwrap()
                 .label("Edge")
-                .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], &BLACK));
+                .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], BLACK));
         }
     }
 }

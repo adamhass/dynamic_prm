@@ -49,10 +49,10 @@ pub mod prelude {
 
     impl Obstacle {
         pub fn new_random(rng: &mut ChaCha8Rng, w: usize, h: usize) -> Obstacle {
-            let x_min = rng.gen_range(0.0..(w as f64 - 1.0)) as f64;
-            let y_min = rng.gen_range(0.0..(h as f64 - 1.0)) as f64;
-            let width = rng.gen_range(1.0..(w as f64 / 10.0)) as f64;
-            let height = rng.gen_range(1.0..(h as f64 / 10.0)) as f64;
+            let x_min = rng.gen_range(0.0..(w as f64 - 1.0));
+            let y_min = rng.gen_range(0.0..(h as f64 - 1.0));
+            let width = rng.gen_range(1.0..(w as f64 / 10.0));
+            let height = rng.gen_range(1.0..(h as f64 / 10.0));
             let rect = Rect::new((x_min, y_min), (x_min + width, y_min + height));
             Obstacle { rect, id: rng.gen_range(0..u128::MAX)}
         }
@@ -79,7 +79,7 @@ pub mod prelude {
         pub fn rectangle(&self) -> Rectangle<(f64, f64)> {
             Rectangle::new(
                 [self.rect.min().x_y(), self.rect.max().x_y()],
-                (&MAGENTA).filled(),
+                (MAGENTA).filled(),
             )
         }
     }
