@@ -10,11 +10,12 @@ use std::{
     f64::consts::PI,
     sync::{Arc, Mutex, RwLock},
 };
+use serde::{Deserialize, Serialize};
 
 const DIMENSIONS: usize = 2;
 
 // Prm stores all edges in viable edges
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DPrm {
     pub(crate) vertices: Arc<Vec<Vertex>>,
     pub(crate) edges: HashMap<EdgeIndex, Edge>,
@@ -29,8 +30,7 @@ impl DPrm {
     /// Create a new DPrm with the given configuration and an initial ObstacleSet.
     /// Initializes viable edges and vertices.
     /// Finds all blocked edges per obstacle.
-    pub async fn new(cfg: PrmConfig, obstacles: Arc<ObstacleSet>) -> DPrm {
-        let mut rng = ChaCha8Rng::from_seed(*cfg.seed.lock().unwrap());
+    pub async fn from_cfg(cfg: PrmConfig, obstacles: Arc<ObstacleSet>) -> DPrm {
         let mut dprm = DPrm {
             vertices: Arc::new(Vec::new()),
             edges: HashMap::new(),
@@ -379,6 +379,6 @@ impl DPrm {
     }
 
     fn get_rng(&self) -> ChaCha8Rng {
-        ChaCha8Rng::from_seed(*(self.cfg.seed.lock().unwrap()))
+        ChaCha8Rng::from_seed(self.cfg.seed)
     }
 }

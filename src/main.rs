@@ -57,7 +57,7 @@ async fn main() {
 
         // Create the PRM
         let start_time = Instant::now();
-        let mut dprm = DPrm::new(cfg, Arc::new(obstacles)).await;
+        let mut dprm = DPrm::from_cfg(cfg, Arc::new(obstacles)).await;
         // End timer, convert to ms
         dprm.print();
         let duration = start_time.elapsed().as_millis() as f64;

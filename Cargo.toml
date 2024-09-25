@@ -6,11 +6,12 @@ edition = "2021"
 [dependencies]
 pathfinding = "4.9.1"
 rand = "0.8.5"
-geo = "0.28.0"
+geo = {version = "0.28.0", features = ["use-serde"]}
 rand_chacha = "0.3.1"
 plotters = "0.3.6"
 tokio = {version = "1.37.0", features= ["full"]}
 num = "0.4.3"
+serde = {version = "1.0.210", features = ["derive", "rc"]}
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports", "async_tokio"] }

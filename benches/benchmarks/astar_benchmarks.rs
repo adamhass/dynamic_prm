@@ -20,7 +20,7 @@ const OTHER_SEED: [u8; 32] = [1u8; 32];
 fn init_dprm() -> DPrm {
     // Parameters common to all benchmarks:
     let cfg = PrmConfig::new(VERTICES, WIDTH, HEIGHT, SEED);
-    DPrm::new(Prm::new(cfg, OBSTACLES))
+    DPrm::from_cfg(Prm::new(cfg, OBSTACLES))
 }
 
 fn precompute_prm(viable_edges: bool) -> DPrm {

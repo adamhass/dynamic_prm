@@ -4,7 +4,7 @@ mod dprm;
 mod prm;
 pub mod prelude {
     use std::sync::Arc;
-    use std::sync::Mutex;
+    use serde::{Deserialize, Serialize};
 
     pub use crate::astar::*;
     pub use crate::dprm::*;
@@ -19,7 +19,7 @@ pub mod prelude {
     pub type VertexIndex = usize;
     pub type ObstacleId = u128;
 
-    #[derive(Clone)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub struct Edge {
         pub line: Line<f64>,
         pub length: f64,
@@ -32,13 +32,13 @@ pub mod prelude {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub struct Vertex {
         pub point: Point<f64>,
         pub index: VertexIndex,
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
     pub struct Obstacle {
         pub rect: Rect<f64>,
         id: ObstacleId,
@@ -90,7 +90,7 @@ pub mod prelude {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub struct ObstacleSet {
         pub obstacles: Vec<Obstacle>,
     }
@@ -122,12 +122,12 @@ pub mod prelude {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Serialize, Deserialize, Debug)]
     pub struct PrmConfig {
         pub num_vertices: usize,
         pub width: usize,
         pub height: usize,
-        pub seed: Arc<Mutex<[u8; 32]>>,
+        pub seed: [u8; 32],
         pub use_viable_edges: bool,
         pub use_blocked_per_obstacle: bool,
         pub threads: usize,
@@ -145,7 +145,7 @@ pub mod prelude {
                 num_vertices,
                 width,
                 height,
-                seed: Arc::new(Mutex::new(seed)),
+                seed: seed,
                 use_viable_edges: false,         // Default to false
                 use_blocked_per_obstacle: false, // Default to false
                 threads,

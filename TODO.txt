@@ -1,6 +1,6 @@
 Make a decent library:
     [X] Use less PUB. 
-    [ ] Document the PUB methods.
+    [X] Document the PUB methods.
     [ ] Separate random initialization and non-random initialization.
     [ ] Use "defaults" instead of constants.
     [ ] Implement serialization.
