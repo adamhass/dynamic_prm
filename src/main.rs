@@ -24,7 +24,7 @@ async fn main() {
     let seed = Arc::new([0u8; 32]);
     let start_width = 100;
     let start_height = 100;
-    let start_num_vertices = 30000;
+    let start_num_vertices = 10000;
     let start_num_obstacles = 100;
     let iterations = 1;
     for i in 1..iterations + 1 {
@@ -91,15 +91,15 @@ async fn main() {
         println!("Found a path optimized in {} ms", duration);
 
         // Write the PRM to disk
-        let serialization_path = format!("output/{}_dprm.json", i);
+        let serialization_path = "output/serialized_dprm.bin";
         let start_time = Instant::now();
-        astar.prm.to_file(serialization_path.as_str());
+        astar.prm.to_file(serialization_path).expect("Failed to write dprm to disk");
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Wrote dprm to disk in {} ms", duration);
 
         // Read the PRM from disk
         let start_time = Instant::now();
-        let dprm2 = DPrm::from_file(serialization_path.as_str());
+        let dprm2 = DPrm::from_file(serialization_path).expect("Failed to read dprm from disk");
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Read dprm from disk in {} ms", duration);
         dprm2.plot(format!("{}_dprm", i), path);

@@ -9,7 +9,8 @@ use std::{
     collections::HashMap, f64::consts::PI, fs::File, sync::{Arc, Mutex, RwLock}, io::{BufWriter, BufReader}
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{from_reader, to_writer_pretty};
+// use serde_json::{from_reader, to_writer_pretty};
+use bincode;
 
 const DIMENSIONS: usize = 2;
 
@@ -44,29 +45,30 @@ impl DPrm {
         dprm
     }
 
-    // Writes the DPrm to a JSON file at the given path.
-    pub fn to_file(&self, file_path: &str) -> serde_json::Result<()> {
+    // Writes the DPrm to a binary file at the given path using Bincode.
+    pub fn to_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Create or truncate the file at the specified path
-        let file = File::create(file_path).unwrap();
+        let file = File::create(file_path)?;
         let writer = BufWriter::new(file);
 
-        // Serialize `dprm` as pretty JSON into the file
-        to_writer_pretty(writer, self)?;
+        // Serialize `self` using Bincode and write to the file
+        bincode::serialize_into(writer, self)?;
 
         println!("DPrm successfully serialized to {}", file_path);
         Ok(())
     }
 
-    pub fn from_file(file_path: &str) -> DPrm {
+    // Reads the DPrm from a binary file at the given path using Bincode.
+    pub fn from_file(file_path: &str) -> Result<DPrm, Box<dyn std::error::Error>> {
         // Open the file in read-only mode
-        let file = File::open(file_path).unwrap();
+        let file = File::open(file_path)?;
         let reader = BufReader::new(file);
 
-        // Deserialize the JSON data into a `DPrm` instance
-        let dprm = from_reader(reader).unwrap();
+        // Deserialize the binary data into a `DPrm` instance using Bincode
+        let dprm = bincode::deserialize_from(reader)?;
 
         println!("DPrm successfully deserialized from {}", file_path);
-        dprm
+        Ok(dprm)
     }
 
     pub fn print(&self) {
