@@ -86,14 +86,23 @@ async fn main() {
 
         // Find a path using A* optimized
         let start_time = Instant::now();
-        let path = astar.run_astar(start, end);
+        let path = astar.run_astar(start.clone(), end.clone());
+        let duration = start_time.elapsed().as_millis() as f64;
+        println!("Found a path optimized in {} ms", duration);
+
+        // Find a path using A* of DPrm
+        let start_time = Instant::now();
+        let path = dprm.run_astar(&start.index, &end.index);
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Found a path optimized in {} ms", duration);
 
         // Write the PRM to disk
         let serialization_path = "output/serialized_dprm.bin";
         let start_time = Instant::now();
-        astar.prm.to_file(serialization_path).expect("Failed to write dprm to disk");
+        astar
+            .prm
+            .to_file(serialization_path)
+            .expect("Failed to write dprm to disk");
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Wrote dprm to disk in {} ms", duration);
 

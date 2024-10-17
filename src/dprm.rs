@@ -5,12 +5,16 @@ use crate::prelude::*;
 use plotters::prelude::*;
 use rand::{prelude::*, seq::index};
 use rand_chacha::ChaCha8Rng;
-use std::{
-    collections::HashMap, f64::consts::PI, fs::File, sync::{Arc, Mutex, RwLock}, io::{BufWriter, BufReader}
-};
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    f64::consts::PI,
+    fs::File,
+    io::{BufReader, BufWriter},
+    sync::{Arc, Mutex, RwLock},
+};
 // use serde_json::{from_reader, to_writer_pretty};
-use bincode;
+use pathfinding::directed::astar::astar;
 
 const DIMENSIONS: usize = 2;
 
@@ -24,9 +28,14 @@ pub struct DPrm {
     blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
     blockings_per_edge: HashMap<EdgeIndex, usize>,
     cfg: PrmConfig,
+    neighbours: Vec<Vec<(VertexIndex, Distance)>>,
 }
 
 impl DPrm {
+    /*
+     *** Initialization ***
+     */
+
     /// Create a new DPrm with the given configuration and an initial ObstacleSet.
     /// Initializes viable edges and vertices.
     /// Finds all blocked edges per obstacle.
@@ -39,9 +48,11 @@ impl DPrm {
             blocked_per_obstacle: HashMap::new(),
             blockings_per_edge: HashMap::new(),
             cfg,
+            neighbours: Vec::new(),
         };
         dprm.initialize_viable_edges_and_vertices().await;
         dprm.initialize_all_blocked().await;
+        dprm.initialize_neighbours();
         dprm
     }
 
@@ -69,31 +80,6 @@ impl DPrm {
 
         println!("DPrm successfully deserialized from {}", file_path);
         Ok(dprm)
-    }
-
-    pub fn print(&self) {
-        println!(
-            "Vertices: {}, Edges: {}, Viable Edges: {}, Blocked Edges: {}, Obstacles: {}",
-            self.vertices.len(),
-            self.edges.len(),
-            self.viable_edges.len(),
-            self.get_all_blocked().len(),
-            self.obstacles.obstacles.len()
-        );
-    }
-
-    /// Returns the nearest vertex to the given point.
-    pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
-        let mut min_distance = f64::MAX;
-        let mut nearest = self.vertices[0].clone();
-        for v in self.vertices.iter() {
-            let distance = v.point.euclidean_distance(&point);
-            if distance < min_distance && !self.obstacles.contains(&v.point) {
-                min_distance = distance;
-                nearest = v.clone();
-            }
-        }
-        nearest
     }
 
     /// Generates all the vertices and finds viable edges between them.
@@ -234,6 +220,9 @@ impl DPrm {
         blocked
     }
 
+    /*
+     *** Dynamic Updates ***
+     */
     /// Makes no changes to &self, only returns the edge id's blocked by the given obstacle
     pub async fn find_blocked_by_obstacle(&self, obstacle: Obstacle) -> Vec<EdgeIndex> {
         let threads = self.cfg.threads;
@@ -317,6 +306,58 @@ impl DPrm {
         unblocked_edges
     }
 
+    /*
+     *** Astar ***
+     */
+
+    /// Initializes the nearest neighbours for efficient Astar execution.
+    /// Should be invoked once the graph is fully initialized for all the obstacle.
+    /// Subsequent calls will overwrite the previous neighbours.
+    /// The mutable insert_blocked_by_obstacle and remove_obstacle functions will update the neighbours.
+    fn initialize_neighbours(&mut self) {
+        for i in 0..self.vertices.len() {
+            self.neighbours.push(Vec::new());
+        }
+        for e in self.edges.values() {
+            self.neighbours[e.points.0].push((e.points.1, e.length.round() as Distance));
+            self.neighbours[e.points.1].push((e.points.0, e.length.round() as Distance));
+        }
+    }
+
+    /// Runs the A* algorithm on the optimized nearest neighbors structure.
+    pub fn run_astar(&self, start: &VertexIndex, end: &VertexIndex) -> Option<AstarPath> {
+        if let Some((path, length)) = astar(
+            start,
+            |v| self.successors(v),
+            |v| self.heuristic(*v, *end),
+            |v| *v == *end,
+        ) {
+            let mut ret = Vec::new();
+            for i in path {
+                ret.push(self.vertices[i].clone());
+            }
+            return Some((ret, length));
+        }
+        None
+    }
+
+    fn successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
+        // Get the successors
+        self.neighbours[*start].clone()
+    }
+
+    fn heuristic(&self, start: VertexIndex, end: VertexIndex) -> Distance {
+        // Get the heuristic
+        self.vertices[start]
+            .point
+            .euclidean_distance(&self.vertices[end].point)
+            .round() as Distance
+    }
+
+    /*
+     *** Utilities ***
+     */
+
     /// Plots the current state of the graph, including vertices, edges, and obstacles.
     /// If a path is provided, it will also be plotted.
     /// Saves the plot to a file with the given name.
@@ -387,6 +428,7 @@ impl DPrm {
         }
     }
 
+    /// Max length of edges in the graph.
     fn max_radius(&self) -> f64 {
         let d = DIMENSIONS as f64;
         let id = 1.0 / d;
@@ -400,7 +442,34 @@ impl DPrm {
         gamma * (n.log(d) / n).powf(id)
     }
 
+    /// Returns a random number generator with the seed from the configuration.
     fn get_rng(&self) -> ChaCha8Rng {
         ChaCha8Rng::from_seed(self.cfg.seed)
+    }
+
+    /// Displays the current state of the graph.
+    pub fn print(&self) {
+        println!(
+            "Vertices: {}, Edges: {}, Viable Edges: {}, Blocked Edges: {}, Obstacles: {}",
+            self.vertices.len(),
+            self.edges.len(),
+            self.viable_edges.len(),
+            self.get_all_blocked().len(),
+            self.obstacles.obstacles.len()
+        );
+    }
+
+    /// Returns the nearest vertex to the given point.
+    pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
+        let mut min_distance = f64::MAX;
+        let mut nearest = self.vertices[0].clone();
+        for v in self.vertices.iter() {
+            let distance = v.point.euclidean_distance(&point);
+            if distance < min_distance && !self.obstacles.contains(&v.point) {
+                min_distance = distance;
+                nearest = v.clone();
+            }
+        }
+        nearest
     }
 }

@@ -3,8 +3,8 @@ mod astar;
 mod dprm;
 mod prm;
 pub mod prelude {
-    use std::sync::Arc;
     use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
 
     pub use crate::astar::*;
     pub use crate::dprm::*;
@@ -145,7 +145,7 @@ pub mod prelude {
                 num_vertices,
                 width,
                 height,
-                seed: seed,
+                seed,
                 use_viable_edges: false,         // Default to false
                 use_blocked_per_obstacle: false, // Default to false
                 threads,
