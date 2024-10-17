@@ -152,4 +152,11 @@ pub mod prelude {
             }
         }
     }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub enum DPrmRequest {
+        Query(VertexIndex, VertexIndex),
+        AddObstacle(Obstacle, VertexIndex, VertexIndex),
+        RemoveObstacle(ObstacleId),
+    }
 }

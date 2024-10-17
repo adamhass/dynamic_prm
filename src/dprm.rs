@@ -287,6 +287,13 @@ impl DPrm {
             }
         }
         self.blocked_per_obstacle.insert(oid, blockings);
+
+        // Update neighbours
+        for e in &blocked_edges {
+                let edge = self.edges.get(&e).unwrap();
+                self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
+                self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
+        }
         blocked_edges
     }
 
@@ -302,6 +309,15 @@ impl DPrm {
                 self.edges.insert(*edge_index, edge);
                 unblocked_edges.push(*edge_index);
             }
+        }
+
+        // Update neighbours
+        for e in &unblocked_edges {
+            let edge = self.edges.get(&e).unwrap();
+            self.neighbours[edge.points.0]
+                .push((edge.points.1, edge.length.round() as Distance));
+            self.neighbours[edge.points.1]
+                .push((edge.points.0, edge.length.round() as Distance));
         }
         unblocked_edges
     }
