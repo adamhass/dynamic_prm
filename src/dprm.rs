@@ -27,7 +27,7 @@ pub struct DPrm {
     obstacles: Arc<ObstacleSet>,
     blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
     blockings_per_edge: HashMap<EdgeIndex, usize>,
-    cfg: PrmConfig,
+    pub cfg: PrmConfig,
     neighbours: Vec<Vec<(VertexIndex, Distance)>>,
 }
 
@@ -482,11 +482,15 @@ impl DPrm {
         let mut nearest = self.vertices[0].clone();
         for v in self.vertices.iter() {
             let distance = v.point.euclidean_distance(&point);
-            if distance < min_distance && !self.obstacles.contains(&v.point) {
+            if distance < min_distance && self.is_free(&v.point) {
                 min_distance = distance;
                 nearest = v.clone();
             }
         }
         nearest
+    }
+
+    pub fn is_free(&self, point: &Point<f64>) -> bool {
+        !self.obstacles.contains(&point)
     }
 }
