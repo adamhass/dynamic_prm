@@ -4,8 +4,6 @@ use super::prelude::*;
 use geo::EuclideanDistance;
 use pathfinding::directed::astar::astar;
 
-pub type AstarPath = (Vec<Vertex>, usize);
-pub type Distance = usize;
 pub struct Astar {
     pub prm: DPrm,
     pub optimized: bool,
@@ -32,7 +30,7 @@ impl Astar {
         }
     }
 
-    pub fn run_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
+    pub fn run_astar(&self, start: Vertex, end: Vertex) -> Option<DPrmPath> {
         // Run the A* algorithm
         // If optimized, use the optimized A* algorithm
         if self.optimized {
@@ -42,7 +40,7 @@ impl Astar {
         }
     }
 
-    pub fn run_basic_astar(&self, start: VertexIndex, end: VertexIndex) -> Option<AstarPath> {
+    pub fn run_basic_astar(&self, start: VertexIndex, end: VertexIndex) -> Option<DPrmPath> {
         // Run the basic A* algorithm
         if let Some((path, length)) = astar(
             &start,
@@ -54,7 +52,10 @@ impl Astar {
             for i in path {
                 ret.push(self.prm.vertices[i].clone());
             }
-            return Some((ret, length));
+            return Some(DPrmPath {
+                vertices: ret,
+                length,
+            });
         }
         None
     }
@@ -85,7 +86,7 @@ impl Astar {
         self.neighbours[*start].clone()
     }
 
-    pub fn run_optimized_astar(&self, start: Vertex, end: Vertex) -> Option<AstarPath> {
+    pub fn run_optimized_astar(&self, start: Vertex, end: Vertex) -> Option<DPrmPath> {
         // Run the basic A* algorithm
         if let Some((path, length)) = astar(
             &start.index,
@@ -97,7 +98,10 @@ impl Astar {
             for i in path {
                 ret.push(self.prm.vertices[i].clone());
             }
-            return Some((ret, length));
+            return Some(DPrmPath {
+                vertices: ret,
+                length,
+            });
         }
         None
     }

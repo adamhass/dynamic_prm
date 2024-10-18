@@ -272,7 +272,7 @@ impl DPrm {
     }
 
     /// Inserts the given obstacle and updates the graph, returning the newly blocked edges.
-    pub async fn insert_blocked_by_obstacle(
+    pub fn insert_blocked_by_obstacle(
         &mut self,
         oid: ObstacleId,
         blockings: Vec<EdgeIndex>,
@@ -290,15 +290,15 @@ impl DPrm {
 
         // Update neighbours
         for e in &blocked_edges {
-                let edge = self.edges.get(&e).unwrap();
-                self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
-                self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
+            let edge = self.edges.get(&e).unwrap();
+            self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
+            self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
         }
         blocked_edges
     }
 
     /// Removes obstacle and updates the graph, and returns the newly unblocked edges.
-    pub async fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
+    pub fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
         let mut unblocked_edges = Vec::new();
         let mut unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
         for edge_index in &unblocked {
@@ -314,10 +314,8 @@ impl DPrm {
         // Update neighbours
         for e in &unblocked_edges {
             let edge = self.edges.get(&e).unwrap();
-            self.neighbours[edge.points.0]
-                .push((edge.points.1, edge.length.round() as Distance));
-            self.neighbours[edge.points.1]
-                .push((edge.points.0, edge.length.round() as Distance));
+            self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
+            self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
         }
         unblocked_edges
     }
@@ -341,7 +339,7 @@ impl DPrm {
     }
 
     /// Runs the A* algorithm on the optimized nearest neighbors structure.
-    pub fn run_astar(&self, start: &VertexIndex, end: &VertexIndex) -> Option<AstarPath> {
+    pub fn run_astar(&self, start: &VertexIndex, end: &VertexIndex) -> Option<DPrmPath> {
         if let Some((path, length)) = astar(
             start,
             |v| self.successors(v),
@@ -352,7 +350,10 @@ impl DPrm {
             for i in path {
                 ret.push(self.vertices[i].clone());
             }
-            return Some((ret, length));
+            return Some(DPrmPath {
+                vertices: ret,
+                length,
+            });
         }
         None
     }
@@ -377,7 +378,7 @@ impl DPrm {
     /// Plots the current state of the graph, including vertices, edges, and obstacles.
     /// If a path is provided, it will also be plotted.
     /// Saves the plot to a file with the given name.
-    pub fn plot(&self, file_name: String, path: Option<AstarPath>) {
+    pub fn plot(&self, file_name: String, path: Option<DPrmPath>) {
         let filename = format!("output/{}.png", file_name);
         // Create a drawing area
         let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
@@ -429,11 +430,11 @@ impl DPrm {
             .legend(|(x, y)| PathElement::new([(x, y), (x + 20, y)], YELLOW));
 
         // Draw path
-        if let Some((path, _)) = path {
+        if let Some(DPrmPath { vertices, .. }) = path {
             // Draw edges
-            let mut pv = path[0].clone();
+            let mut pv = vertices[0].clone();
             chart
-                .draw_series(path.iter().map(|v| {
+                .draw_series(vertices.iter().map(|v| {
                     let e = PathElement::new(vec![pv.point.x_y(), v.point.x_y()], BLACK);
                     pv = v.clone();
                     e

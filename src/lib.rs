@@ -159,4 +159,12 @@ pub mod prelude {
         AddObstacle(Obstacle, VertexIndex, VertexIndex),
         RemoveObstacle(ObstacleId),
     }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct DPrmPath {
+        pub vertices: Vec<Vertex>,
+        pub length: Distance,
+    }
+
+    pub type Distance = usize;
 }
