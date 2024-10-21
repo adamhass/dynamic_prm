@@ -155,14 +155,6 @@ pub mod prelude {
     }
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub enum DPrmRequest {
-        Query(VertexIndex, VertexIndex),
-        AddObstacle(Obstacle, VertexIndex, VertexIndex),
-        RemoveObstacle(ObstacleId),
-        Neighbors(Vec<SocketAddr>)
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
     pub struct DPrmPath {
         pub vertices: Vec<Vertex>,
         pub length: Distance,
