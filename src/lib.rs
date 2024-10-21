@@ -4,6 +4,7 @@ mod dprm;
 mod prm;
 pub mod prelude {
     use serde::{Deserialize, Serialize};
+    use std::net::SocketAddr;
     use std::sync::Arc;
 
     pub use crate::astar::*;
@@ -158,6 +159,7 @@ pub mod prelude {
         Query(VertexIndex, VertexIndex),
         AddObstacle(Obstacle, VertexIndex, VertexIndex),
         RemoveObstacle(ObstacleId),
+        Neighbors(Vec<SocketAddr>)
     }
 
     #[derive(Debug, Serialize, Deserialize)]
