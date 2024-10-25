@@ -1,9 +1,8 @@
-#![allow(unused)]
-use geo::{Contains, EuclideanDistance, Intersects, Line, Point, Rect};
+use geo::{EuclideanDistance, Line, Point};
 // use pathfinding::directed::astar::astar;
 use crate::prelude::*;
 use plotters::prelude::*;
-use rand::{prelude::*, seq::index};
+use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,7 +10,6 @@ use std::{
     f64::consts::PI,
     fs::File,
     io::{BufReader, BufWriter},
-    sync::{Arc, Mutex, RwLock},
 };
 // use serde_json::{from_reader, to_writer_pretty};
 use pathfinding::directed::astar::astar;
@@ -21,10 +19,10 @@ const DIMENSIONS: usize = 2;
 // Prm stores all edges in viable edges
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DPrm {
-    pub(crate) vertices: Arc<Vec<Vertex>>,
+    pub(crate) vertices: Vec<Vertex>,
     pub(crate) edges: HashMap<EdgeIndex, Edge>,
-    viable_edges: Arc<Vec<Edge>>,
-    obstacles: Arc<ObstacleSet>,
+    viable_edges: Vec<Edge>,
+    obstacles: ObstacleSet,
     blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
     blockings_per_edge: HashMap<EdgeIndex, usize>,
     pub cfg: PrmConfig,
@@ -39,11 +37,11 @@ impl DPrm {
     /// Create a new DPrm with the given configuration and an initial ObstacleSet.
     /// Initializes viable edges and vertices.
     /// Finds all blocked edges per obstacle.
-    pub async fn from_cfg(cfg: PrmConfig, obstacles: Arc<ObstacleSet>) -> DPrm {
+    pub async fn from_cfg(cfg: PrmConfig, obstacles: ObstacleSet) -> DPrm {
         let mut dprm = DPrm {
-            vertices: Arc::new(Vec::new()),
+            vertices: Vec::new(),
             edges: HashMap::new(),
-            viable_edges: Arc::new(Vec::new()),
+            viable_edges: Vec::new(),
             obstacles,
             blocked_per_obstacle: HashMap::new(),
             blockings_per_edge: HashMap::new(),
@@ -85,8 +83,8 @@ impl DPrm {
     /// Generates all the vertices and finds viable edges between them.
     async fn initialize_viable_edges_and_vertices(&mut self) {
         let (vertices, viable_edges) = self.generate_viable_edges_and_vertices().await;
-        self.vertices = Arc::new(vertices);
-        self.viable_edges = Arc::new(viable_edges);
+        self.vertices = vertices;
+        self.viable_edges = viable_edges;
     }
 
     async fn generate_viable_edges_and_vertices(&self) -> (Vec<Vertex>, Vec<Edge>) {
@@ -138,7 +136,7 @@ impl DPrm {
     }
 
     async fn viable_edges_worker(&self, start: usize, end: usize) -> (Vec<Vertex>, Vec<Edge>) {
-        let mut points = self.generate_vertices(end, self.cfg.width, self.cfg.height);
+        let points = self.generate_vertices(end, self.cfg.width, self.cfg.height);
         let mut vertices = Vec::new();
         let mut edges = Vec::new();
         let radius = self.max_radius();
@@ -191,7 +189,6 @@ impl DPrm {
         println!("Found all blocked edges");
         self.blocked_per_obstacle = blocked_per_obstacle;
         self.update_blockings();
-        self.update_edges();
     }
 
     fn update_blockings(&mut self) {
@@ -203,12 +200,14 @@ impl DPrm {
         }
     }
 
-    fn update_edges(&mut self) {
-        for (i, edge) in self.viable_edges.iter().enumerate() {
+    fn get_all_free_edges(&self) -> Vec<EdgeIndex> {
+        let mut free = Vec::new();
+        for (i, _) in self.viable_edges.iter().enumerate() {
             if self.blockings_per_edge.get(&i).unwrap_or(&0) == &0 {
-                self.edges.insert(i, edge.clone());
+                free.push(i);
             }
         }
+        free
     }
 
     fn get_all_blocked(&self) -> Vec<EdgeIndex> {
@@ -272,52 +271,42 @@ impl DPrm {
     }
 
     /// Inserts the given obstacle and updates the graph, returning the newly blocked edges.
-    pub fn insert_blocked_by_obstacle(
-        &mut self,
-        oid: ObstacleId,
-        blockings: Vec<EdgeIndex>,
-    ) -> Vec<EdgeIndex> {
-        let mut blocked_edges = Vec::new();
-        for edge_index in &blockings {
+    pub fn insert_blocked_by_obstacle(&mut self, obstacle: Obstacle, blockings: Vec<EdgeIndex>) {
+        self.obstacles.add(obstacle);
+        let mut newly_blocked_edges = Vec::new();
+        for edge_index in blockings.iter() {
             let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
             *count += 1;
             if *count == 1 {
-                let _ = self.edges.remove(edge_index);
-                blocked_edges.push(*edge_index);
+                newly_blocked_edges.push(*edge_index);
             }
         }
-        self.blocked_per_obstacle.insert(oid, blockings);
-
+        self.blocked_per_obstacle.insert(obstacle.id(), blockings);
+        
         // Update neighbours
-        for e in &blocked_edges {
-            let edge = self.edges.get(&e).unwrap();
-            self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
-            self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
+        for e in newly_blocked_edges {
+            if let Some(edge) = self.viable_edges.get(e) {
+                self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
+                self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
+            }
         }
-        blocked_edges
     }
 
     /// Removes obstacle and updates the graph, and returns the newly unblocked edges.
-    pub fn remove_obstacle(&mut self, oid: ObstacleId) -> Vec<EdgeIndex> {
+    pub fn remove_obstacle(&mut self, oid: ObstacleId) {
         let mut unblocked_edges = Vec::new();
-        let mut unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
-        for edge_index in &unblocked {
+        let unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
+        for edge_index in unblocked.iter() {
             let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
             *count -= 1;
             if *count == 0 {
                 let edge = self.viable_edges[*edge_index].clone();
-                self.edges.insert(*edge_index, edge);
                 unblocked_edges.push(*edge_index);
+                // Update neighbours on the fly
+                self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
+                self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
             }
         }
-
-        // Update neighbours
-        for e in &unblocked_edges {
-            let edge = self.edges.get(&e).unwrap();
-            self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
-            self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
-        }
-        unblocked_edges
     }
 
     /*
@@ -329,10 +318,11 @@ impl DPrm {
     /// Subsequent calls will overwrite the previous neighbours.
     /// The mutable insert_blocked_by_obstacle and remove_obstacle functions will update the neighbours.
     fn initialize_neighbours(&mut self) {
-        for i in 0..self.vertices.len() {
+        for _ in 0..self.vertices.len() {
             self.neighbours.push(Vec::new());
         }
-        for e in self.edges.values() {
+        for edge_index in self.get_all_free_edges() {
+            let e = &self.viable_edges[edge_index];
             self.neighbours[e.points.0].push((e.points.1, e.length.round() as Distance));
             self.neighbours[e.points.1].push((e.points.0, e.length.round() as Distance));
         }
@@ -403,7 +393,7 @@ impl DPrm {
         // Draw vertices
         chart
             .draw_series(
-                (*self.vertices)
+                (self.vertices)
                     .clone()
                     .into_iter()
                     .map(|v| Circle::new(v.point.0.x_y(), 3, BLACK)),
@@ -412,8 +402,9 @@ impl DPrm {
 
         // Draw edges
         chart
-            .draw_series(self.edges.values().map(|edge| {
-                PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], CYAN)
+            .draw_series(self.get_all_free_edges().iter().map(|edge_index| {
+                let Edge { line, .. } = &self.viable_edges[*edge_index];
+                PathElement::new(vec![line.start.x_y(), line.end.x_y()], CYAN)
             }))
             .unwrap()
             .label("Edge")
@@ -466,13 +457,16 @@ impl DPrm {
 
     /// Displays the current state of the graph.
     pub fn print(&self) {
+        let neighbor_edges = self.neighbours.iter().map(|n| n.len()).sum::<usize>();
         println!(
-            "Vertices: {}, Edges: {}, Viable Edges: {}, Blocked Edges: {}, Obstacles: {}",
+            "Vertices: {}, Edges: {}, Viable Edges: {}, Blocked Edges: {}, Obstacles: {}, Neighbours: {}, Total Neighbor Edges: {}",
             self.vertices.len(),
-            self.edges.len(),
+            self.get_all_free_edges().len(),
             self.viable_edges.len(),
             self.get_all_blocked().len(),
-            self.obstacles.obstacles.len()
+            self.obstacles.obstacles.len(),
+            self.neighbours.len(),
+            neighbor_edges
         );
     }
 
@@ -491,6 +485,6 @@ impl DPrm {
     }
 
     pub fn is_free(&self, point: &Point<f64>) -> bool {
-        !self.obstacles.contains(&point)
+        !self.obstacles.contains(point)
     }
 }

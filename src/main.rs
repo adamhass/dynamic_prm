@@ -57,51 +57,31 @@ async fn main() {
 
         // Create the PRM
         let start_time = Instant::now();
-        let mut dprm = DPrm::from_cfg(cfg, Arc::new(obstacles)).await;
+        let mut dprm = DPrm::from_cfg(cfg, obstacles).await;
         // End timer, convert to ms
         dprm.print();
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Initialized dprm in {} ms", duration);
 
-        // Initialize A*
-        let start_time = Instant::now();
-        let mut astar = Astar::new(dprm.clone());
-        let duration = start_time.elapsed().as_millis() as f64;
-        println!("Initialized Astar naively in {} ms", duration);
-
-        // Find a path using A* naively
+        // Find a path using A* of DPrm
         let start = dprm.get_nearest(Point::new(0.0, height as f64));
         let end = dprm.get_nearest(Point::new(width as f64, 0.0));
         let start_time = Instant::now();
-        let path = astar.run_astar(start.clone(), end.clone());
-        let duration = start_time.elapsed().as_millis() as f64;
-        println!("Found a path naively in {} ms", duration);
-
-        // Optimize for A*
-        let start_time = Instant::now();
-        astar.optimized = true;
-        astar.init_neighbours();
-        let duration = start_time.elapsed().as_millis() as f64;
-        println!("Optimized Astar in {} ms", duration);
-
-        // Find a path using A* optimized
-        let start_time = Instant::now();
-        let path = astar.run_astar(start.clone(), end.clone());
-        let duration = start_time.elapsed().as_millis() as f64;
-        println!("Found a path optimized in {} ms", duration);
-
-        // Find a path using A* of DPrm
-        let start_time = Instant::now();
         let path = dprm.run_astar(&start.index, &end.index);
         let duration = start_time.elapsed().as_millis() as f64;
-        println!("Found a path optimized in {} ms", duration);
+        if let Some(p) = &path {
+            println!(
+                "Found a path optimized in {} ms of length {}",
+                duration, p.length
+            );
+        } else {
+            println!("Found NO path in {} ms", duration);
+        }
 
         // Write the PRM to disk
         let serialization_path = "output/serialized_dprm.bin";
         let start_time = Instant::now();
-        astar
-            .prm
-            .to_file(serialization_path)
+        dprm.to_file(serialization_path)
             .expect("Failed to write dprm to disk");
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Wrote dprm to disk in {} ms", duration);

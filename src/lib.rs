@@ -1,19 +1,12 @@
-#![allow(unused)]
-mod astar;
 mod dprm;
-mod prm;
 pub mod prelude {
     use serde::{Deserialize, Serialize};
-    use std::net::SocketAddr;
-    use std::sync::Arc;
-
-    pub use crate::astar::*;
     pub use crate::dprm::*;
 
     use geo::{Contains, Intersects};
     use geo::{Line, Point, Rect};
     use plotters::prelude::*;
-    use rand::{prelude::*, seq::index};
+    use rand::{prelude::*};
     use rand_chacha::ChaCha8Rng;
 
     pub type EdgeIndex = usize;
@@ -120,6 +113,10 @@ pub mod prelude {
 
         pub fn remove(&mut self, obstacle: &Obstacle) {
             self.obstacles.retain(|o| o != obstacle);
+        }
+
+        pub fn add(&mut self, obstacle: Obstacle) {
+            self.obstacles.push(obstacle);
         }
     }
 
