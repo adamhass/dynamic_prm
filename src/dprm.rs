@@ -19,14 +19,14 @@ const DIMENSIONS: usize = 2;
 // Prm stores all edges in viable edges
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DPrm {
-    pub(crate) vertices: Vec<Vertex>,
+    pub(crate) vertices: HashMap<VertexIndex, Vertex>,
     pub(crate) edges: HashMap<EdgeIndex, Edge>,
-    viable_edges: Vec<Edge>,
+    // viable_edges: Vec<Edge>,
     obstacles: ObstacleSet,
     blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
     blockings_per_edge: HashMap<EdgeIndex, usize>,
     pub cfg: PrmConfig,
-    neighbours: Vec<Vec<(VertexIndex, Distance)>>,
+    neighbors: Neighbors,
 }
 
 impl DPrm {
@@ -39,14 +39,14 @@ impl DPrm {
     /// Finds all blocked edges per obstacle.
     pub async fn from_cfg(cfg: PrmConfig, obstacles: ObstacleSet) -> DPrm {
         let mut dprm = DPrm {
-            vertices: Vec::new(),
+            vertices: HashMap::new(),
             edges: HashMap::new(),
-            viable_edges: Vec::new(),
+            // viable_edges: Vec::new(),
             obstacles,
             blocked_per_obstacle: HashMap::new(),
             blockings_per_edge: HashMap::new(),
             cfg,
-            neighbours: Vec::new(),
+            neighbors: Neighbors::new(),
         };
         dprm.initialize_viable_edges_and_vertices().await;
         dprm.initialize_all_blocked().await;
@@ -82,9 +82,13 @@ impl DPrm {
 
     /// Generates all the vertices and finds viable edges between them.
     async fn initialize_viable_edges_and_vertices(&mut self) {
-        let (vertices, viable_edges) = self.generate_viable_edges_and_vertices().await;
-        self.vertices = vertices;
-        self.viable_edges = viable_edges;
+        let (vertices, edges) = self.generate_viable_edges_and_vertices().await;
+        vertices.iter().enumerate().for_each(|(i, v)| {
+            self.vertices.insert(i, v.clone());
+        });
+        edges.iter().enumerate().for_each(|(i, e)| {
+            self.edges.insert(i, e.clone());
+        });
     }
 
     async fn generate_viable_edges_and_vertices(&self) -> (Vec<Vertex>, Vec<Edge>) {
@@ -202,9 +206,9 @@ impl DPrm {
 
     fn get_all_free_edges(&self) -> Vec<EdgeIndex> {
         let mut free = Vec::new();
-        for (i, _) in self.viable_edges.iter().enumerate() {
-            if self.blockings_per_edge.get(&i).unwrap_or(&0) == &0 {
-                free.push(i);
+        for (i, _) in self.edges.iter() {
+            if self.blockings_per_edge.get(i).unwrap_or(&0) == &0 {
+                free.push(*i);
             }
         }
         free
@@ -225,7 +229,7 @@ impl DPrm {
     /// Makes no changes to &self, only returns the edge id's blocked by the given obstacle
     pub async fn find_blocked_by_obstacle(&self, obstacle: Obstacle) -> Vec<EdgeIndex> {
         let threads = self.cfg.threads;
-        let n = self.viable_edges.len();
+        let n = self.edges.len();
         let chunk_size = (n + threads - 1) / threads;
         let mut handles = Vec::new();
         for i in 0..threads {
@@ -262,7 +266,7 @@ impl DPrm {
     ) -> Vec<EdgeIndex> {
         let mut blocked = Vec::new();
         for i in start..end {
-            let edge = &self.viable_edges[i];
+            let edge = &self.edges[&i];
             if obstacle.intersects(&edge.line) {
                 blocked.push(i);
             }
@@ -285,10 +289,7 @@ impl DPrm {
         
         // Update neighbours
         for e in newly_blocked_edges {
-            if let Some(edge) = self.viable_edges.get(e) {
-                self.neighbours[edge.points.0].retain(|(v, _)| *v != edge.points.1);
-                self.neighbours[edge.points.1].retain(|(v, _)| *v != edge.points.0);
-            }
+            self.remove_neighbors(&self.edges[&e]);
         }
     }
 
@@ -300,23 +301,21 @@ impl DPrm {
             let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
             *count -= 1;
             if *count == 0 {
-                let edge = self.viable_edges[*edge_index].clone();
+                let edge = self.edges[edge_index].clone();
                 unblocked_edges.push(*edge_index);
                 // Update neighbours on the fly
-                self.make_neighbors(&edge);
+                self.neighbors.add_neighbors(&edge);
            }
         }
     }
     
-    fn make_neighbors(&mut self, edge: &Edge) {
-        self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
-        self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
-    }
-
     /// Inserts new potential vertices and edges into the DPRM and updates the blockings and the graph.
     /// Compares each edge in edges to each obstacle in self.obstacles.
     pub fn add_potentials(&mut self, mut vertices: Vec<Vertex>, edges: Vec<(EdgeIndex, Edge)>) {
-        self.vertices.append(&mut vertices);
+        // Insert vertices
+        for v in vertices {self.vertices.insert(v.index, v);}
+        
+        // Insert edges and fix blockings on the fly
         for (idx, edge) in edges {
             let mut blockings = 0;
             for obstacle in self.obstacles.obstacles.iter() {
@@ -346,13 +345,8 @@ impl DPrm {
     /// Subsequent calls will overwrite the previous neighbours.
     /// The mutable insert_blocked_by_obstacle and remove_obstacle functions will update the neighbours.
     fn initialize_neighbours(&mut self) {
-        for _ in 0..self.vertices.len() {
-            self.neighbours.push(Vec::new());
-        }
         for edge_index in self.get_all_free_edges() {
-            let e = &self.viable_edges[edge_index];
-            self.neighbours[e.points.0].push((e.points.1, e.length.round() as Distance));
-            self.neighbours[e.points.1].push((e.points.0, e.length.round() as Distance));
+            self.neighbors.add_neighbors(&self.edges[&edge_index]);
         }
     }
 
@@ -366,7 +360,7 @@ impl DPrm {
         ) {
             let mut ret = Vec::new();
             for i in path {
-                ret.push(self.vertices[i].clone());
+                ret.push(self.vertices[&i].clone());
             }
             return Some(DPrmPath {
                 vertices: ret,
@@ -378,14 +372,14 @@ impl DPrm {
 
     fn successors(&self, start: &VertexIndex) -> Vec<(VertexIndex, Distance)> {
         // Get the successors
-        self.neighbours[*start].clone()
+        self.neighbors.get(start).clone()
     }
 
     fn heuristic(&self, start: VertexIndex, end: VertexIndex) -> Distance {
         // Get the heuristic
-        self.vertices[start]
+        self.vertices[&start]
             .point
-            .euclidean_distance(&self.vertices[end].point)
+            .euclidean_distance(&self.vertices[&end].point)
             .round() as Distance
     }
 
@@ -424,14 +418,14 @@ impl DPrm {
                 (self.vertices)
                     .clone()
                     .into_iter()
-                    .map(|v| Circle::new(v.point.0.x_y(), 3, BLACK)),
+                    .map(|(_, v)| Circle::new(v.point.0.x_y(), 3, BLACK)),
             )
             .unwrap();
 
         // Draw edges
         chart
             .draw_series(self.get_all_free_edges().iter().map(|edge_index| {
-                let Edge { line, .. } = &self.viable_edges[*edge_index];
+                let Edge { line, .. } = &self.edges[edge_index];
                 PathElement::new(vec![line.start.x_y(), line.end.x_y()], CYAN)
             }))
             .unwrap()
@@ -441,7 +435,7 @@ impl DPrm {
         // Draw blocked edges
         chart
             .draw_series(self.get_all_blocked().iter().map(|edge_index| {
-                let edge = &self.viable_edges[*edge_index];
+                let edge = &self.edges[edge_index];
                 PathElement::new(vec![edge.line.start.x_y(), edge.line.end.x_y()], YELLOW)
             }))
             .unwrap()
@@ -485,12 +479,12 @@ impl DPrm {
 
     /// Displays the current state of the graph.
     pub fn print(&self) {
-        let neighbor_edges = self.neighbours.iter().map(|n| n.len()).sum::<usize>();
+        let neighbor_edges = self.neighbours.iter().map(|(_, neighbors)| neighbors.len()).sum::<usize>();
         println!(
             "Vertices: {}, Edges: {}, Viable Edges: {}, Blocked Edges: {}, Obstacles: {}, Neighbours: {}, Total Neighbor Edges: {}",
             self.vertices.len(),
             self.get_all_free_edges().len(),
-            self.viable_edges.len(),
+            self.edges.len(),
             self.get_all_blocked().len(),
             self.obstacles.obstacles.len(),
             self.neighbours.len(),
@@ -499,14 +493,14 @@ impl DPrm {
     }
 
     /// Returns the nearest vertex to the given point.
-    pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
+    pub fn get_nearest(&self, point: Point<f64>) -> VertexIndex {
         let mut min_distance = f64::MAX;
-        let mut nearest = self.vertices[0].clone();
-        for v in self.vertices.iter() {
+        let mut nearest: VertexIndex = 0;
+        for (vid, v) in self.vertices.iter() {
             let distance = v.point.euclidean_distance(&point);
             if distance < min_distance && self.is_free(&v.point) {
                 min_distance = distance;
-                nearest = v.clone();
+                nearest = *vid;
             }
         }
         nearest
@@ -514,5 +508,33 @@ impl DPrm {
 
     pub fn is_free(&self, point: &Point<f64>) -> bool {
         !self.obstacles.contains(point)
+    }
+}
+
+struct Neighbors {
+    inner: HashMap<VertexIndex, Vec<(VertexIndex, Distance)>>,
+}
+
+impl Neighbors {
+    fn new() -> Neighbors {
+        Neighbors {
+            inner: HashMap::new(),
+        }
+    }
+
+    fn get(&self, v: &VertexIndex) -> &Vec<(VertexIndex, Distance)> {
+        if let Some(vec) = self.inner.get(v) {
+            vec
+        } else { &Vec::new() }
+    }
+
+    fn add_neighbors(&mut self, e: &Edge) {
+        self.inner.entry(e.points.0).or_insert(Vec::new()).push((e.points.1, e.length.round() as Distance));
+        self.inner.entry(e.points.1).or_insert(Vec::new()).push((e.points.0, e.length.round() as Distance));
+    }
+
+    fn remove_neighbors(&mut self, e: &Edge) {
+        self.inner.entry(e.points.0).or_insert(Vec::new()).retain(|(v, _)| *v != e.points.1);
+        self.inner.entry(e.points.1).or_insert(Vec::new()).retain(|(v, _)| *v != e.points.0);
     }
 }
