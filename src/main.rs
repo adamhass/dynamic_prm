@@ -67,7 +67,7 @@ async fn main() {
         let start = dprm.get_nearest(Point::new(0.0, height as f64));
         let end = dprm.get_nearest(Point::new(width as f64, 0.0));
         let start_time = Instant::now();
-        let path = dprm.run_astar(&start, &end);
+        let path = dprm.run_astar(&start.index, &end.index);
         let duration = start_time.elapsed().as_millis() as f64;
         if let Some(p) = &path {
             println!(

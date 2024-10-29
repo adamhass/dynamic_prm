@@ -493,7 +493,7 @@ impl DPrm {
     }
 
     /// Returns the nearest vertex to the given point.
-    pub fn get_nearest(&self, point: Point<f64>) -> VertexIndex {
+    pub fn get_nearest(&self, point: Point<f64>) -> Vertex {
         let mut min_distance = f64::MAX;
         let mut nearest: VertexIndex = 0;
         for (vid, v) in self.vertices.iter() {
@@ -503,7 +503,7 @@ impl DPrm {
                 nearest = *vid;
             }
         }
-        nearest
+        self.vertices[&nearest].clone()
     }
 
     pub fn is_free(&self, point: &Point<f64>) -> bool {
