@@ -303,12 +303,40 @@ impl DPrm {
                 let edge = self.viable_edges[*edge_index].clone();
                 unblocked_edges.push(*edge_index);
                 // Update neighbours on the fly
-                self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
-                self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
+                self.make_neighbors(&edge);
+           }
+        }
+    }
+    
+    fn make_neighbors(&mut self, edge: &Edge) {
+        self.neighbours[edge.points.0].push((edge.points.1, edge.length.round() as Distance));
+        self.neighbours[edge.points.1].push((edge.points.0, edge.length.round() as Distance));
+    }
+
+    /// Inserts new potential vertices and edges into the DPRM and updates the blockings and the graph.
+    /// Compares each edge in edges to each obstacle in self.obstacles.
+    pub fn add_potentials(&mut self, mut vertices: Vec<Vertex>, edges: Vec<(EdgeIndex, Edge)>) {
+        self.vertices.append(&mut vertices);
+        for (idx, edge) in edges {
+            let mut blockings = 0;
+            for obstacle in self.obstacles.obstacles.iter() {
+                if obstacle.intersects(&edge.line) {
+                    blockings += 1;
+                    self.blocked_per_obstacle.entry(obstacle.id()).or_insert(Vec::new()).push(idx);
+                }
             }
+            if blockings == 0 {
+                self.make_neighbors(&edge);
+            }
+            self.blockings_per_edge.insert(idx, blockings);
+            self.edges.insert(idx, edge);
         }
     }
 
+    /// Removes potential vertices and edges from the DPRM and updates the blockings and the graph.
+    pub fn remove_potentials(&mut self, vertices: Vec<Vertex>, edges: Vec<Edge>) {
+        
+    }
     /*
      *** Astar ***
      */
