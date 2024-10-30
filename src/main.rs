@@ -95,7 +95,7 @@ async fn main() {
         let dprm2 = DPrm::from_file(serialization_path).expect("Failed to read dprm from disk");
         let duration = start_time.elapsed().as_millis() as f64;
         println!("Read dprm from disk in {} ms", duration);
-        dprm2.plot(format!("{}_dprm", i), path);
+        dprm2.plot(format!("output/{}.png", i), path);
 
         /*
 
