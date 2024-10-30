@@ -50,8 +50,12 @@ async fn main() {
         let obstacle_seed = [i + 2_u8; 32];
         let obstacles = ObstacleSet::new_random(
             num_obstacles,
-            width,
-            height,
+             10.0,
+            1.0,
+            0.0,
+            0.0,
+            (width as f64) - 1.0,
+            (height as f64) - 1.0,
             &mut ChaCha8Rng::from_seed(obstacle_seed),
         );
 

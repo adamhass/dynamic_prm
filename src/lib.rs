@@ -45,12 +45,12 @@ pub mod prelude {
     }
 
     impl Obstacle {
-        pub fn new_random(rng: &mut ChaCha8Rng, w: usize, h: usize) -> Obstacle {
-            let x_min = rng.gen_range(0.0..(w as f64 - 1.0));
-            let y_min = rng.gen_range(0.0..(h as f64 - 1.0));
-            let width = rng.gen_range(1.0..(w as f64 / 10.0));
-            let height = rng.gen_range(1.0..(h as f64 / 10.0));
-            let rect = Rect::new((x_min, y_min), (x_min + width, y_min + height));
+        pub fn new_random(rng: &mut ChaCha8Rng, obstacle_max_size: f64, obstacle_min_size: f64, x_min: f64, y_min: f64, x_max: f64, y_max: f64) -> Obstacle {
+            let x_pos = rng.gen_range(x_min..(x_max));
+            let y_pos = rng.gen_range(y_min..(y_max));
+            let width = rng.gen_range(obstacle_min_size..(obstacle_max_size));
+            let height = rng.gen_range(obstacle_min_size..(obstacle_max_size));
+            let rect = Rect::new((x_pos, y_pos), (x_pos + width, y_pos + height));
             Obstacle {
                 rect,
                 id: rng.gen_range(0..u128::MAX),
@@ -92,13 +92,12 @@ pub mod prelude {
     impl ObstacleSet {
         pub fn new_random(
             n: usize,
-            width: usize,
-            height: usize,
+            obstacle_max_size: f64, obstacle_min_size: f64, x_min: f64, y_min: f64, x_max: f64, y_max: f64,
             rng: &mut ChaCha8Rng,
         ) -> ObstacleSet {
             let mut obstacles = Vec::new();
             while obstacles.len() < n {
-                obstacles.push(Obstacle::new_random(rng, width, height));
+                obstacles.push(Obstacle::new_random(rng, obstacle_max_size, obstacle_min_size, x_min, y_min, x_max, y_max));
             }
             ObstacleSet { obstacles }
         }
