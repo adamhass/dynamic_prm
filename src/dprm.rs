@@ -391,9 +391,9 @@ impl DPrm {
     /// If a path is provided, it will also be plotted.
     /// Saves the plot to a file with the given name.
     pub fn plot(&self, file_name: String, path: Option<DPrmPath>) {
-        let filename = format!("output/{}.png", file_name);
+        // let filename = format!("output/{}.png", file_name);
         // Create a drawing area
-        let root = BitMapBackend::new(&filename, (2000_u32, 2000_u32)).into_drawing_area();
+        let root = BitMapBackend::new(&file_name, (2000_u32, 2000_u32)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         // Define the chart
