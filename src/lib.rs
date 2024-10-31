@@ -114,6 +114,10 @@ pub mod prelude {
             self.obstacles.retain(|o| o != obstacle);
         }
 
+        pub fn remove_by_id(&mut self, oid: ObstacleId) {
+            self.obstacles.retain(|o| o.id() != oid);
+        }
+
         pub fn add(&mut self, obstacle: Obstacle) {
             self.obstacles.push(obstacle);
         }

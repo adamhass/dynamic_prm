@@ -304,14 +304,12 @@ impl DPrm {
 
     /// Removes obstacle and updates the graph, and returns the newly unblocked edges.
     pub fn remove_obstacle(&mut self, oid: ObstacleId) {
-        let mut unblocked_edges = Vec::new();
         if let Some(unblocked) = self.blocked_per_obstacle.remove(&oid) {
             for edge_index in unblocked.iter() {
                 let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
                 *count -= 1;
                 if *count == 0 {
                     let edge = self.edges[edge_index].clone();
-                    unblocked_edges.push(*edge_index);
                     // Update neighbors on the fly
                     self.neighbors.add(&edge);
                 }
@@ -319,6 +317,7 @@ impl DPrm {
         } else {
             println!("Obstacle {} not found", oid);
         }
+        self.obstacles.remove_by_id(oid);
     }
     
     /// Inserts new potential vertices and edges into the DPRM and updates the blockings and the graph.
