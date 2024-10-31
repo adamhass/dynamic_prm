@@ -223,6 +223,15 @@ impl DPrm {
         blocked
     }
 
+    pub fn contains_obstacle(&self, oid: ObstacleId) -> bool {
+        for o in &self.obstacles.obstacles {
+            if o.id() == oid {
+                return true;
+            }
+        }
+        false
+    }
+
     /*
      *** Dynamic Updates ***
      */
@@ -296,16 +305,19 @@ impl DPrm {
     /// Removes obstacle and updates the graph, and returns the newly unblocked edges.
     pub fn remove_obstacle(&mut self, oid: ObstacleId) {
         let mut unblocked_edges = Vec::new();
-        let unblocked = self.blocked_per_obstacle.remove(&oid).unwrap();
-        for edge_index in unblocked.iter() {
-            let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
-            *count -= 1;
-            if *count == 0 {
-                let edge = self.edges[edge_index].clone();
-                unblocked_edges.push(*edge_index);
-                // Update neighbors on the fly
-                self.neighbors.add(&edge);
-           }
+        if let Some(unblocked) = self.blocked_per_obstacle.remove(&oid) {
+            for edge_index in unblocked.iter() {
+                let count = self.blockings_per_edge.entry(*edge_index).or_insert(0);
+                *count -= 1;
+                if *count == 0 {
+                    let edge = self.edges[edge_index].clone();
+                    unblocked_edges.push(*edge_index);
+                    // Update neighbors on the fly
+                    self.neighbors.add(&edge);
+                }
+            }
+        } else {
+            println!("Obstacle {} not found", oid);
         }
     }
     
