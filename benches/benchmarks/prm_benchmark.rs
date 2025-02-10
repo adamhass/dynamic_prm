@@ -1,3 +1,4 @@
+/*
 #![allow(unused)]
 use criterion::BenchmarkId;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -140,3 +141,5 @@ criterion_group!(
     benchmark_add_obstacle
 ); // benchmark_parallel_prm
 criterion_main!(prm_benchmarks);
+
+*/

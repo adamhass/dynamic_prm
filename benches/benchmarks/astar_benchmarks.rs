@@ -1,3 +1,4 @@
+/*
 #![allow(unused)]
 use criterion::BenchmarkId;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -91,3 +92,5 @@ fn benchmark_astar_updates(c: &mut Criterion) {
 
 criterion_group!(astar_benchmarks, benchmark_astar,);
 criterion_main!(astar_benchmarks);
+
+*/

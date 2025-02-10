@@ -2,70 +2,79 @@
 use criterion::BenchmarkId;
 use criterion::{criterion_group, criterion_main, Criterion};
 use dynamic_prm::prelude::*;
+use geo::Rect;
 use pathfinding::matrix::directions::S;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 
-const VERTICES: usize = 30000; // 10000;
-const THREAD_LIST: [usize; 3] = [4, 8, 16];
+// const VERTICES: usize = 30000; // 10000;
+const THREADS: usize = 8;
 const OBSTACLES: usize = 100;
 const WIDTH: usize = 150;
 const HEIGHT: usize = 150;
 const SEED: [u8; 32] = [0u8; 32];
 const OTHER_SEED: [u8; 32] = [1u8; 32];
+const VERTICES_LIST: [usize; 4] = [10000, 20000, 40000, 80000];
+// const VERTICES_LIST: [usize; 4] = [100, 200, 400, 800];
 
-fn init_dprm() -> DPrm {
-    // Parameters common to all benchmarks:
-    let cfg = PrmConfig::new(VERTICES, WIDTH, HEIGHT, SEED);
-    DPrm::from_cfg(Prm::new(cfg, OBSTACLES))
+fn cfg(vertices: usize) -> PrmConfig {
+    PrmConfig::new(vertices, WIDTH, HEIGHT, SEED, 4)
 }
 
+fn obstacles() -> ObstacleSet {
+    ObstacleSet::new_random(
+        OBSTACLES,
+        10.0,
+        1.0,
+        0.0,
+        0.0,
+        (WIDTH as f64) - 1.0,
+        (HEIGHT as f64) - 1.0,
+        &mut ChaCha8Rng::from_seed(OTHER_SEED),
+    )
+}
+
+async fn make_dprm(vertices: usize) -> DPrm {
+    // Parameters common to all benchmarks:
+    DPrm::from_cfg(cfg(vertices), obstacles()).await
+}
+
+async fn prm(vertices: usize, obstacles: ObstacleSet) -> Prm {
+    Prm::from_cfg(cfg(vertices), obstacles).await
+} 
+
 fn benchmark_steps(c: &mut Criterion) {
-    let mut group = c.benchmark_group(format!("DPrm computations, {} Vertices", VERTICES));
-    let mut dprm = init_dprm();
-    let mut rng = ChaCha8Rng::from_seed(OTHER_SEED);
+    let mut group = c.benchmark_group(format!("DPrm vs. Prm, {} threads", THREADS));
+    
     // Use a loop to create benchmarks for each number of threads
-    for &num_threads in &THREAD_LIST {
+    for &vertices in &VERTICES_LIST {
+        // Precompute dprm
+        let dprm = Runtime::new().unwrap().block_on(make_dprm(vertices));
+        // Benchmark the obstacle insertion
+        let extra_obstacle: Obstacle = Obstacle{rect: Rect::new((70.0, 70.0), (80.0, 80.0)), id: (OBSTACLES+1) as u128};
         group.bench_with_input(
-            BenchmarkId::new("Viable edges and vertices, Threads", num_threads),
-            &num_threads,
-            |b, &num_threads| {
+            BenchmarkId::new("DPrm Obstacle Insertion", vertices),
+            &vertices,
+            |b, &vertices| {
                 b.to_async(Runtime::new().unwrap()).iter_batched_ref(
                     || {},
-                    |_| dprm.generate_viable_edges_and_vertices(num_threads),
+                    |_| dprm.find_blocked_by_obstacle(extra_obstacle.clone()),
                     criterion::BatchSize::SmallInput,
                 );
             },
         );
-        Runtime::new()
-            .unwrap()
-            .block_on(dprm.update_viable_edges_and_vertices(4));
+
+        // Generate ObstacleSet
+        let mut obstacles = obstacles();
         group.bench_with_input(
-            BenchmarkId::new("Find all blocked, Threads", num_threads),
-            &num_threads,
-            |b, &num_threads| {
-                b.to_async(Runtime::new().unwrap()).iter_batched(
+            BenchmarkId::new("Full Prm Compute", vertices),
+            &vertices,
+            |b, &vertices| {
+                b.to_async(Runtime::new().unwrap()).iter_batched_ref(
                     || {},
-                    |_| dprm.find_all_blocked(num_threads),
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
-        Runtime::new().unwrap().block_on(dprm.update_all_blocked(4));
-        group.bench_with_input(
-            BenchmarkId::new("Find blocked edges by obstacle, Threads", num_threads),
-            &num_threads,
-            |b, &num_threads| {
-                b.to_async(Runtime::new().unwrap()).iter_batched(
-                    || {},
-                    |_| {
-                        dprm.find_blocked_by_obstacle(
-                            Obstacle::new_random(&mut rng, WIDTH, HEIGHT),
-                            num_threads,
-                        )
-                    },
+                    |_| prm(vertices, obstacles.clone()),
                     criterion::BatchSize::SmallInput,
                 );
             },

@@ -1,7 +1,9 @@
 mod dprm;
+mod prm;
 pub mod prelude {
     use serde::{Deserialize, Serialize};
     pub use crate::dprm::*;
+    pub use crate::prm::Prm;
 
     use geo::{Contains, Intersects};
     use geo::{Line, Point, Rect};
@@ -35,7 +37,7 @@ pub mod prelude {
     #[derive(Clone, Copy, Serialize, Deserialize, Debug)]
     pub struct Obstacle {
         pub rect: Rect<f64>,
-        id: ObstacleId,
+        pub id: ObstacleId,
     }
 
     impl PartialEq for Obstacle {
