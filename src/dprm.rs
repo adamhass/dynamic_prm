@@ -6,10 +6,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
-    f64::consts::PI,
-    fs::File,
-    io::{BufReader, BufWriter},
+    collections::HashMap, f64::consts::PI, fs::File, hash::Hash, io::{BufReader, BufWriter}, sync::Arc
 };
 // use serde_json::{from_reader, to_writer_pretty};
 use pathfinding::directed::astar::astar;
@@ -20,7 +17,7 @@ const DIMENSIONS: usize = 2;
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct DPrm {
     pub(crate) vertices: HashMap<VertexIndex, Vertex>,
-    pub(crate) edges: HashMap<EdgeIndex, Edge>,
+    pub(crate) edges: Arc<HashMap<EdgeIndex, Edge>>,
     // viable_edges: Vec<Edge>,
     obstacles: ObstacleSet,
     blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>>,
@@ -40,7 +37,7 @@ impl DPrm {
     pub async fn from_cfg(cfg: PrmConfig, obstacles: ObstacleSet) -> DPrm {
         let mut dprm = DPrm {
             vertices: HashMap::new(),
-            edges: HashMap::new(),
+            edges: Arc::new(HashMap::new()),
             // viable_edges: Vec::new(),
             obstacles,
             blocked_per_obstacle: HashMap::new(),
@@ -86,9 +83,11 @@ impl DPrm {
         vertices.iter().enumerate().for_each(|(i, v)| {
             self.vertices.insert(i, v.clone());
         });
+        let mut edge_map = HashMap::new();
         edges.iter().enumerate().for_each(|(i, e)| {
-            self.edges.insert(i, e.clone());
+            edge_map.insert(i, e.clone());
         });
+        self.edges = Arc::new(edge_map);
     }
 
     async fn generate_viable_edges_and_vertices(&self) -> (Vec<Vertex>, Vec<Edge>) {
@@ -169,26 +168,10 @@ impl DPrm {
     /// Updates self to be an accurate representation of all current obstacles.
     async fn initialize_all_blocked(&mut self) {
         println!("Finding blocked per obstacle...");
-        let mut handles = Vec::new();
-        for o in &self.obstacles.obstacles {
-            let clone = self.clone();
-            let obstacle = *o;
-            let handle =
-                tokio::spawn(async move { clone.find_blocked_by_obstacle(obstacle).await });
-            handles.push((handle, o.id()));
-        }
-        //        let mut all_blocked: Vec<EdgeIndex> = Vec::new();
         let mut blocked_per_obstacle: HashMap<ObstacleId, Vec<EdgeIndex>> = HashMap::new();
-        for (handle, id) in handles {
-            match handle.await {
-                Ok(e_index) => {
-                    //                    all_blocked.extend(&e_index);
-                    blocked_per_obstacle.insert(id, e_index);
-                }
-                Err(e) => {
-                    eprintln!("Error: {:?}", e);
-                }
-            }
+        for o in self.obstacles.obstacles.iter() {
+            let blockings = self.find_blocked_by_obstacle(*o).await;
+            blocked_per_obstacle.insert(o.id(), blockings);
         }
         println!("Found all blocked edges");
         self.blocked_per_obstacle = blocked_per_obstacle;
@@ -244,12 +227,11 @@ impl DPrm {
         for i in 0..threads {
             let start = i * chunk_size;
             let end = ((i + 1) * chunk_size).min(n);
-            let clone = self.clone();
+            let clone = self.edges.clone();
             let handle =
                 tokio::spawn(
-                    async move { clone.find_blocked_by_obstacle_worker(start, end, obstacle) },
+                    async move { Self::find_blocked_by_obstacle_worker(clone, start, end, obstacle) },
                 );
-
             handles.push(handle);
         }
         // Collect all results
@@ -268,14 +250,14 @@ impl DPrm {
     }
 
     fn find_blocked_by_obstacle_worker(
-        &self,
+        edges: Arc<HashMap<EdgeIndex, Edge>>,
         start: EdgeIndex,
         end: EdgeIndex,
         obstacle: Obstacle,
     ) -> Vec<EdgeIndex> {
         let mut blocked = Vec::new();
         for i in start..end {
-            let edge = &self.edges[&i];
+            let edge = &edges[&i];
             if obstacle.intersects(&edge.line) {
                 blocked.push(i);
             }
@@ -320,33 +302,29 @@ impl DPrm {
         self.obstacles.remove_by_id(oid);
     }
     
-    /// Inserts new potential vertices and edges into the DPRM and updates the blockings and the graph.
-    /// Compares each edge in edges to each obstacle in self.obstacles.
-    pub fn add_potentials(&mut self, vertices: Vec<Vertex>, edges: Vec<(EdgeIndex, Edge)>) {
-        // Insert vertices
-        for v in vertices {self.vertices.insert(v.index, v);}
+    // /// Inserts new potential vertices and edges into the DPRM and updates the blockings and the graph.
+    // /// Compares each edge in edges to each obstacle in self.obstacles.
+    // pub fn add_potentials(&mut self, vertices: Vec<Vertex>, edges: Vec<(EdgeIndex, Edge)>) {
+    //     // Insert vertices
+    //     for v in vertices {self.vertices.insert(v.index, v);}
         
-        // Insert edges and fix blockings on the fly
-        for (idx, edge) in edges {
-            let mut blockings = 0;
-            for obstacle in self.obstacles.obstacles.iter() {
-                if obstacle.intersects(&edge.line) {
-                    blockings += 1;
-                    self.blocked_per_obstacle.entry(obstacle.id()).or_insert(Vec::new()).push(idx);
-                }
-            }
-            if blockings == 0 {
-                self.neighbors.add(&edge);
-            }
-            self.blockings_per_edge.insert(idx, blockings);
-            self.edges.insert(idx, edge);
-        }
-    }
+    //     // Insert edges and fix blockings on the fly
+    //     for (idx, edge) in edges {
+    //         let mut blockings = 0;
+    //         for obstacle in self.obstacles.obstacles.iter() {
+    //             if obstacle.intersects(&edge.line) {
+    //                 blockings += 1;
+    //                 self.blocked_per_obstacle.entry(obstacle.id()).or_insert(Vec::new()).push(idx);
+    //             }
+    //         }
+    //         if blockings == 0 {
+    //             self.neighbors.add(&edge);
+    //         }
+    //         self.blockings_per_edge.insert(idx, blockings);
+    //         self.edges.insert(idx, edge);
+    //     }
+    // }
 
-    /// Removes potential vertices and edges from the DPRM and updates the blockings and the graph.
-    pub fn remove_potentials(&mut self, vertices: Vec<Vertex>, edges: Vec<Edge>) {
-        
-    }
     /*
      *** Astar ***
      */

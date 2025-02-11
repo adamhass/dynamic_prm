@@ -66,19 +66,19 @@ fn benchmark_steps(c: &mut Criterion) {
             },
         );
 
-        // Generate ObstacleSet
-        let mut obstacles = obstacles();
-        group.bench_with_input(
-            BenchmarkId::new("Full Prm Compute", vertices),
-            &vertices,
-            |b, &vertices| {
-                b.to_async(Runtime::new().unwrap()).iter_batched_ref(
-                    || {},
-                    |_| prm(vertices, obstacles.clone()),
-                    criterion::BatchSize::SmallInput,
-                );
-            },
-        );
+        // // Generate ObstacleSet
+        // let mut obstacles = obstacles();
+        // group.bench_with_input(
+        //     BenchmarkId::new("Full Prm Compute", vertices),
+        //     &vertices,
+        //     |b, &vertices| {
+        //         b.to_async(Runtime::new().unwrap()).iter_batched_ref(
+        //             || {},
+        //             |_| prm(vertices, obstacles.clone()),
+        //             criterion::BatchSize::SmallInput,
+        //         );
+        //     },
+        // );
     }
 }
 
