@@ -83,5 +83,9 @@ fn benchmark_steps(c: &mut Criterion) {
 }
 
 // Define the criterion group and criterion main functions
-criterion_group!(dprm_benchmarks, benchmark_steps,); // benchmark_parallel_prm
+criterion_group!{
+    name = dprm_benchmarks;
+    config = Criterion::default().sample_size(10);
+    targets = benchmark_steps
+} // benchmark_parallel_prm
 criterion_main!(dprm_benchmarks);
