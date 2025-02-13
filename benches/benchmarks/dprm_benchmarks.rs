@@ -15,7 +15,7 @@ const THREADS: usize = 4;
 const OBSTACLES: usize = 100;
 const WIDTH: usize = 150;
 const HEIGHT: usize = 150;
-const VERTICES_LIST: [usize; 4] = [10000, 20000, 40000, 80000];
+const VERTICES_LIST: [usize; 2] = [80000, 160000];
 // const VERTICES_LIST: [usize; 4] = [100, 200, 400, 800];
 
 fn cfg(vertices: usize) -> PrmConfig {
