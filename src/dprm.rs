@@ -230,7 +230,7 @@ impl DPrm {
             let clone = self.edges.clone();
             let handle =
                 tokio::spawn(
-                    async move { Self::find_blocked_by_obstacle_worker(clone, start, end, obstacle) },
+                    Self::find_blocked_by_obstacle_worker(clone, start, end, obstacle)
                 );
             handles.push(handle);
         }
@@ -249,17 +249,23 @@ impl DPrm {
         blocked_edges
     }
 
-    fn find_blocked_by_obstacle_worker(
+    async fn find_blocked_by_obstacle_worker(
         edges: Arc<HashMap<EdgeIndex, Edge>>,
         start: EdgeIndex,
         end: EdgeIndex,
         obstacle: Obstacle,
     ) -> Vec<EdgeIndex> {
         let mut blocked = Vec::new();
+        let mut counter = 0;
         for i in start..end {
             let edge = &edges[&i];
             if obstacle.intersects(&edge.line) {
                 blocked.push(i);
+            }
+            counter += 1;
+            // Yield every 1000 iterations (adjust as needed)
+            if counter % 1000 == 0 {
+                tokio::task::yield_now().await;
             }
         }
         blocked
