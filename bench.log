@@ -1,0 +1,32 @@
+nohup: ignoring input
+warning: unused import: `hash::Hash`
+ --> src/dprm.rs:9:54
+  |
+9 |     collections::HashMap, f64::consts::PI, fs::File, hash::Hash, io::{BufReader, BufWriter}, sync::Arc
+  |                                                      ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `dynamic_prm` (lib) generated 1 warning (run `cargo fix --lib -p dynamic_prm` to apply 1 suggestion)
+warning: `dynamic_prm` (lib test) generated 1 warning (1 duplicate)
+    Finished `bench` profile [optimized] target(s) in 0.08s
+     Running unittests src/lib.rs (target/release/deps/dynamic_prm-e7259e5350776cd5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/release/deps/dynamic_prm-ca809b04bbd13f55)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running benches/bench_main.rs (target/release/deps/bench_main-dc9407b5e6de8767)
+Gnuplot not found, using plotters backend
+Benchmarking DPrm vs. Prm, 4 threads/DPrm Obstacle Insertion/250000
+Benchmarking DPrm vs. Prm, 4 threads/DPrm Obstacle Insertion/250000: Warming up for 3.0000 s
+start 0 end 62500
+start 62500 end 125000
+start 125000 end 187500
+start 187500 end 250000
